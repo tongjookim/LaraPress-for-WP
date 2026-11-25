@@ -19,7 +19,7 @@ if ( $current_theme_style === 'newyorktimes-style' ) {
 } elseif ( $current_theme_style === 'amber-journal' ) {
     // Amber Journal은 자체 레이아웃을 그린 뒤 바로 get_footer() 호출
 } else {
-    $lp_main_class    = 'py-10 bg-slate-50';
+    $lp_main_class    = 'py-6 md:py-10 bg-slate-50';
     $lp_content_class = 'bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm';
     $lp_sidebar_class = '';
 }
@@ -284,6 +284,19 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                     <?php echo lp_aj_hot_news_html(); ?>
                 </div>
 
+                <!-- 인기 검색어 위젯 -->
+                <div class="aj-widget">
+                    <div class="aj-widget-head">
+                        <span class="aj-widget-mark"></span>
+                        <h2 class="aj-widget-title">인기 검색어</h2>
+                        <span style="margin-left:auto;font-size:0.68rem;color:#9ca3af;">최근 7일</span>
+                    </div>
+                    <?php echo lp_aj_popular_keywords_html(); ?>
+                </div>
+
+                <!-- 기자 순위 위젯 -->
+                <?php echo lp_reporter_rank_widget_html( 'aj' ); ?>
+
                 <!-- 추천 기사 (둥근 썸네일) 위젯 -->
                 <?php
                 $aj_picks_custom  = get_theme_mod( 'lp_aj_picks_title', '' );
@@ -322,7 +335,8 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
             <div class="lg:col-span-3 min-h-[500px] <?php echo $lp_content_class; ?>">
                 
                 <?php if (is_front_page() || is_home()) : ?>
-                    <!-- 프론트 페이지 뉴스 위젯 (Breaking News) -->
+                    <?php if ( $current_theme_style !== 'swn-style' ) : ?>
+                    <!-- 프론트 페이지 뉴스 위젯 (Breaking News) — NYT · Basic 스킨 -->
                     <div class="mb-12">
                         <h2 class="text-2xl font-black mb-6 border-b-2 border-slate-900 pb-3 flex items-center gap-2 lp-section-head">
                             <span class="w-2 h-6 bg-red-600 inline-block"></span> Breaking News
@@ -371,8 +385,179 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                         endif; wp_reset_postdata();
                         ?>
                     </div>
+                    <?php else : /* ══════════════════════════════════════════════════
+                                     SWN 스킨 프론트 페이지 — "Home 27"(neeon/청라온 실사이트) 스타일 이식
+                                     히어로 오버레이 + 소형 그리드 → 최신뉴스/새소식 2단 + 인기 카테고리 → 위클리 추천 슬라이더
+                                     ══════════════════════════════════════════════════ */
 
-                    <!-- 홈 화면 위젯 (Customizer → 홈 화면 위젯 설정) -->
+                        $lp_home_used_ids = [];
+
+                        /* ⓪ TRENDING 티커 (최신 기사 마키) — "주요 뉴스" 바로 위 */
+                        $lp_ticker_q     = new WP_Query( [ 'posts_per_page' => 5, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true, 'orderby' => 'date', 'order' => 'DESC' ] );
+                        $lp_ticker_posts = $lp_ticker_q->posts;
+                        wp_reset_postdata();
+                        ?>
+                        <?php if ( $lp_ticker_posts ) : ?>
+                        <div class="lp-content-ticker lp-ticker-wrap">
+                            <span class="lp-ticker-badge">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7v8l10-12h-7z"/></svg>
+                                TRENDING
+                            </span>
+                            <div class="lp-ticker-track">
+                                <ul class="lp-ticker-list">
+                                    <?php for ( $lp_t_i = 0; $lp_t_i < 2; $lp_t_i++ ) : // 이어붙여 끊김 없이 순환하도록 2회 출력
+                                        foreach ( $lp_ticker_posts as $lp_t_p ) : ?>
+                                        <li><a href="<?php echo esc_url( get_permalink( $lp_t_p ) ); ?>"><?php echo esc_html( get_the_title( $lp_t_p ) ); ?></a></li>
+                                        <?php endforeach;
+                                    endfor; ?>
+                                </ul>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        <?php
+                        /* ① 히어로 오버레이 (rt-post-overlay) + 소형 그리드 (rt-post-grid) */
+                        $lp_hero_q    = new WP_Query( [ 'posts_per_page' => 1, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => false ] );
+                        $lp_hero_post = $lp_hero_q->posts ? $lp_hero_q->posts[0] : null;
+                        wp_reset_postdata();
+                        if ( $lp_hero_post ) $lp_home_used_ids[] = $lp_hero_post->ID;
+
+                        $lp_grid_q = new WP_Query( [ 'posts_per_page' => 4, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true, 'post__not_in' => $lp_home_used_ids ] );
+                        foreach ( $lp_grid_q->posts as $lp_gp ) $lp_home_used_ids[] = $lp_gp->ID;
+                        wp_reset_postdata();
+                        ?>
+
+                        <?php if ( $lp_hero_post ) : ?>
+                        <div class="mb-12">
+                            <h2 class="text-2xl font-black mb-6 border-b-2 border-slate-900 pb-3 flex items-center gap-2 lp-section-head">
+                                <span class="w-2 h-6 bg-red-600 inline-block"></span> 주요 뉴스
+                            </h2>
+                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                                <a href="<?php echo esc_url( get_permalink( $lp_hero_post ) ); ?>" class="lg:col-span-3 group relative block overflow-hidden rounded-xl" style="height:26rem;">
+                                    <?php if ( has_post_thumbnail( $lp_hero_post ) ) :
+                                        echo get_the_post_thumbnail( $lp_hero_post, 'large', [ 'style' => 'width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s;', 'class' => 'group-hover:scale-105' ] );
+                                    else : ?>
+                                        <div class="w-full h-full bg-slate-200"></div>
+                                    <?php endif; ?>
+                                    <div class="absolute inset-0" style="background:linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.15) 55%, rgba(0,0,0,0) 100%);"></div>
+                                    <div class="absolute bottom-0 left-0 right-0 p-6 text-white">
+                                        <?php $lp_hero_cats = get_the_category( $lp_hero_post->ID );
+                                        if ( $lp_hero_cats ) :
+                                            $lp_hero_cat = $lp_hero_cats[0]; ?>
+                                        <span class="lp-cat-pill mb-3" style="background-color:<?php echo esc_attr( lp_get_category_color( $lp_hero_cat->term_id ) ); ?>;"><?php echo esc_html( $lp_hero_cat->name ); ?></span>
+                                        <?php endif; ?>
+                                        <h3 class="text-2xl md:text-3xl font-bold leading-tight mb-2"><?php echo esc_html( get_the_title( $lp_hero_post ) ); ?></h3>
+                                        <span class="text-sm text-white/70"><?php echo esc_html( get_the_date( 'Y.m.d', $lp_hero_post ) ); ?></span>
+                                    </div>
+                                </a>
+                                <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+                                    <?php foreach ( $lp_grid_q->posts as $lp_gp ) :
+                                        $lp_gp_cats = get_the_category( $lp_gp->ID );
+                                        $lp_gp_cat  = $lp_gp_cats ? $lp_gp_cats[0] : null;
+                                    ?>
+                                    <a href="<?php echo esc_url( get_permalink( $lp_gp ) ); ?>" class="group block">
+                                        <div class="overflow-hidden rounded-lg mb-2 bg-slate-100" style="aspect-ratio:16/10;">
+                                            <?php if ( has_post_thumbnail( $lp_gp ) ) : echo get_the_post_thumbnail( $lp_gp, 'medium', [ 'style' => 'width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s;', 'class' => 'group-hover:scale-105' ] ); endif; ?>
+                                        </div>
+                                        <?php if ( $lp_gp_cat ) : ?>
+                                        <span class="lp-cat-pill mb-1" style="background-color:<?php echo esc_attr( lp_get_category_color( $lp_gp_cat->term_id ) ); ?>;"><?php echo esc_html( $lp_gp_cat->name ); ?></span>
+                                        <?php endif; ?>
+                                        <h4 class="text-sm font-bold leading-snug line-clamp-2 group-hover:text-blue-600 transition"><?php echo esc_html( get_the_title( $lp_gp ) ); ?></h4>
+                                    </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php
+                        /* ② 최신 뉴스 / 새소식 2단 + 인기 카테고리 (rt-post-list · rt-category) */
+                        $lp_latest_q = new WP_Query( [ 'posts_per_page' => 5, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true, 'post__not_in' => $lp_home_used_ids ] );
+                        foreach ( $lp_latest_q->posts as $lp_lp ) $lp_home_used_ids[] = $lp_lp->ID;
+                        wp_reset_postdata();
+
+                        $lp_notice_cat  = get_term_by( 'name', '공지사항', 'category' );
+                        $lp_notice_args = [ 'posts_per_page' => 5, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true, 'post__not_in' => $lp_home_used_ids ];
+                        if ( $lp_notice_cat ) $lp_notice_args['cat'] = $lp_notice_cat->term_id;
+                        $lp_notice_q = new WP_Query( $lp_notice_args );
+                        if ( ! $lp_notice_q->have_posts() && $lp_notice_cat ) {
+                            unset( $lp_notice_args['cat'] );
+                            $lp_notice_q = new WP_Query( $lp_notice_args );
+                        }
+                        foreach ( $lp_notice_q->posts as $lp_np ) $lp_home_used_ids[] = $lp_np->ID;
+                        wp_reset_postdata();
+                        ?>
+                        <div class="mb-12 grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-8">
+                            <div>
+                                <h2 class="text-xl font-bold mb-4 border-b border-slate-200 pb-2"><span class="text-blue-700">최신 뉴스</span></h2>
+                                <ul class="space-y-3">
+                                    <?php if ( $lp_latest_q->posts ) : foreach ( $lp_latest_q->posts as $lp_lp ) : ?>
+                                    <li class="flex items-center gap-3 group">
+                                        <a href="<?php echo esc_url( get_permalink( $lp_lp ) ); ?>" class="flex-shrink-0 w-20 h-14 overflow-hidden rounded bg-slate-100 block">
+                                            <?php if ( has_post_thumbnail( $lp_lp ) ) : echo get_the_post_thumbnail( $lp_lp, 'thumbnail', [ 'style' => 'width:100%;height:100%;object-fit:cover;display:block;', 'class' => 'group-hover:scale-105 transition-transform duration-300' ] ); endif; ?>
+                                        </a>
+                                        <div class="flex-1 min-w-0">
+                                            <a href="<?php echo esc_url( get_permalink( $lp_lp ) ); ?>" class="text-slate-700 hover:text-blue-600 transition font-medium line-clamp-2 text-sm leading-snug block"><?php echo esc_html( get_the_title( $lp_lp ) ); ?></a>
+                                            <span class="text-xs text-slate-400"><?php echo esc_html( get_the_date( 'm.d', $lp_lp ) ); ?></span>
+                                        </div>
+                                    </li>
+                                    <?php endforeach; else : echo '<li class="text-sm text-slate-400">게시물이 없습니다.</li>'; endif; ?>
+                                </ul>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold mb-4 border-b border-slate-200 pb-2"><span class="text-blue-700">새소식</span></h2>
+                                <ul class="space-y-3">
+                                    <?php if ( $lp_notice_q->posts ) : foreach ( $lp_notice_q->posts as $lp_np ) : ?>
+                                    <li class="flex items-center gap-3 group">
+                                        <a href="<?php echo esc_url( get_permalink( $lp_np ) ); ?>" class="flex-shrink-0 w-20 h-14 overflow-hidden rounded bg-slate-100 block">
+                                            <?php if ( has_post_thumbnail( $lp_np ) ) : echo get_the_post_thumbnail( $lp_np, 'thumbnail', [ 'style' => 'width:100%;height:100%;object-fit:cover;display:block;', 'class' => 'group-hover:scale-105 transition-transform duration-300' ] ); endif; ?>
+                                        </a>
+                                        <div class="flex-1 min-w-0">
+                                            <a href="<?php echo esc_url( get_permalink( $lp_np ) ); ?>" class="text-slate-700 hover:text-blue-600 transition font-medium line-clamp-2 text-sm leading-snug block"><?php echo esc_html( get_the_title( $lp_np ) ); ?></a>
+                                            <span class="text-xs text-slate-400"><?php echo esc_html( get_the_date( 'm.d', $lp_np ) ); ?></span>
+                                        </div>
+                                    </li>
+                                    <?php endforeach; else : echo '<li class="text-sm text-slate-400">게시물이 없습니다.</li>'; endif; ?>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <?php
+                        /* ③ 위클리 추천 슬라이더 (rt-post-slider) — 댓글 많은 순, 부족하면 최신순 보충 */
+                        $lp_weekly_q = new WP_Query( [ 'posts_per_page' => 8, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true, 'post__not_in' => $lp_home_used_ids, 'orderby' => 'comment_count', 'order' => 'DESC' ] );
+                        if ( ! $lp_weekly_q->have_posts() ) {
+                            $lp_weekly_q = new WP_Query( [ 'posts_per_page' => 8, 'post_status' => 'publish', 'no_found_rows' => true, 'ignore_sticky_posts' => true ] );
+                        }
+                        ?>
+                        <?php if ( $lp_weekly_q->have_posts() ) : ?>
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
+                                <h2 class="text-xl font-bold"><span class="text-blue-700">위클리 추천</span></h2>
+                                <div class="lp-slider-nav">
+                                    <button type="button" class="lp-slider-btn" data-lp-slide="-1" aria-label="이전 카드">‹</button>
+                                    <button type="button" class="lp-slider-btn" data-lp-slide="1" aria-label="다음 카드">›</button>
+                                </div>
+                            </div>
+                            <div class="lp-weekly-track" id="lpWeeklyTrack">
+                                <?php foreach ( $lp_weekly_q->posts as $lp_wp ) :
+                                    $lp_wp_cats = get_the_category( $lp_wp->ID );
+                                    $lp_wp_cat  = $lp_wp_cats ? $lp_wp_cats[0] : null;
+                                ?>
+                                <a href="<?php echo esc_url( get_permalink( $lp_wp ) ); ?>" class="lp-weekly-card group">
+                                    <div class="overflow-hidden rounded-lg mb-2 bg-slate-100" style="aspect-ratio:4/3;">
+                                        <?php if ( has_post_thumbnail( $lp_wp ) ) : echo get_the_post_thumbnail( $lp_wp, 'medium', [ 'style' => 'width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s;', 'class' => 'group-hover:scale-105' ] ); endif; ?>
+                                    </div>
+                                    <?php if ( $lp_wp_cat ) : ?>
+                                    <span class="lp-cat-pill mb-1" style="background-color:<?php echo esc_attr( lp_get_category_color( $lp_wp_cat->term_id ) ); ?>;"><?php echo esc_html( $lp_wp_cat->name ); ?></span>
+                                    <?php endif; ?>
+                                    <h4 class="text-sm font-bold leading-snug line-clamp-2 group-hover:text-blue-600 transition"><?php echo esc_html( get_the_title( $lp_wp ) ); ?></h4>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; wp_reset_postdata(); ?>
+                    <?php endif; ?>
+
+                    <!-- 홈 화면 위젯 (테마 설정 → 레이아웃 → 홈 화면 레이아웃) -->
                     <?php
                     $lp_grid_map = [
                         1 => 'grid-cols-1',
@@ -426,7 +611,9 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                                             <?php endif; ?>
                                         </a>
                                         <div class="flex-1 flex flex-col">
-                                            <?php if ( $gc ) : ?><a href="<?php echo esc_url( get_category_link( $gc->term_id ) ); ?>" class="text-[11px] font-bold text-blue-600 uppercase tracking-wide mb-1 hover:underline"><?php echo esc_html( $gc->name ); ?></a><?php endif; ?>
+                                            <?php if ( $gc && $current_theme_style === 'swn-style' ) : ?>
+                                            <a href="<?php echo esc_url( get_category_link( $gc->term_id ) ); ?>" class="lp-cat-pill mb-2" style="background-color:<?php echo esc_attr( lp_get_category_color( $gc->term_id ) ); ?>;"><?php echo esc_html( $gc->name ); ?></a>
+                                            <?php elseif ( $gc ) : ?><a href="<?php echo esc_url( get_category_link( $gc->term_id ) ); ?>" class="text-[11px] font-bold text-blue-600 uppercase tracking-wide mb-1 hover:underline"><?php echo esc_html( $gc->name ); ?></a><?php endif; ?>
                                             <h3 class="font-bold text-slate-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition mb-auto"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
                                             <p class="text-xs text-slate-400 mt-2"><?php echo get_the_date( 'Y.m.d' ); ?></p>
                                         </div>
@@ -1312,6 +1499,7 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
 
                         /* ── SNS 공유 함수 ── */
                         window.lpShare = function (platform) {
+                            if (window.lpTrackShare) window.lpTrackShare(platform);
                             var url   = encodeURIComponent(location.href);
                             var title = encodeURIComponent(document.title);
                             var targets = {
@@ -1319,16 +1507,12 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                                 twitter:  'https://twitter.com/intent/tweet?url=' + url + '&text=' + title
                             };
                             if (platform === 'kakao') {
-                                /* Kakao SDK 미설치 환경 폴백: URL 복사 */
-                                if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) {
-                                    window.Kakao.Link.sendDefault({ objectType: 'feed',
-                                        content: { title: document.title, webUrl: location.href,
-                                            mobileWebUrl: location.href,
-                                            imageUrl: '', description: '' },
-                                        buttons: [{ title: '기사 보기', link: { webUrl: location.href } }] });
+                                /* 카카오 SDK 헬퍼 (assets/js/kakao-share.js) — 키 미설정 시 URL 복사로 폴백 */
+                                if (window.lpKakaoShare) {
+                                    window.lpKakaoShare();
                                 } else {
                                     navigator.clipboard.writeText(location.href).then(function () {
-                                        alert('카카오톡 SDK 미설치 환경입니다.\nURL이 클립보드에 복사되었습니다.');
+                                        alert('URL이 클립보드에 복사되었습니다.');
                                     });
                                 }
                                 return;
@@ -1460,9 +1644,11 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                     <!-- 일반 페이지 -->
                     <?php
                     if (have_posts()) :
-                        while (have_posts()) : the_post();
-                            the_content();
-                        endwhile;
+                        while (have_posts()) : the_post(); ?>
+                        <div class="aj-article-content">
+                            <?php the_content(); ?>
+                        </div>
+                        <?php endwhile;
                     else: ?>
                         <div class="text-center py-20 text-slate-500">표시할 콘텐츠가 없습니다.</div>
                     <?php endif; ?>
@@ -1475,21 +1661,33 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                     <h3 class="font-bold text-slate-800 border-b border-slate-900 pb-2 mb-4 flex items-center gap-2">기사 검색</h3>
                     <form method="get" action="<?php echo esc_url(home_url('/')); ?>" class="flex">
                         <input type="text" name="s" placeholder="검색어 입력..." class="w-full border border-slate-300 rounded-l px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        <button type="submit" class="bg-slate-900 text-white px-4 rounded-r text-sm font-medium hover:bg-slate-800">검색</button>
+                        <button type="submit" class="bg-slate-900 text-white px-3 rounded-r hover:bg-slate-800 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg></button>
                     </form>
                 </div>
 
-                <!-- 카테고리 목록 위젯 -->
+                <!-- 카테고리 목록 위젯 (SWN 스킨 = HOT CATEGORIES · neeon 스타일 인기순) -->
                 <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 class="font-bold text-slate-800 border-b border-slate-900 pb-2 mb-4">카테고리</h3>
+                    <h3 class="font-bold text-slate-800 border-b border-slate-900 pb-2 mb-4">
+                        <?php echo $current_theme_style === 'swn-style' ? 'HOT CATEGORIES' : '카테고리'; ?>
+                    </h3>
                     <?php
                     $lp_show_bullet  = get_theme_mod( 'lp_cat_show_bullet', '1' );
-                    $lp_sidebar_cats = get_categories( [
-                        'hide_empty' => false,
-                        'exclude'    => get_option( 'default_category' ),
-                        'orderby'    => 'name',
-                        'order'      => 'ASC',
-                    ] );
+                    if ( $current_theme_style === 'swn-style' ) {
+                        $lp_sidebar_cats = get_categories( [
+                            'number'     => 8,
+                            'hide_empty' => true,
+                            'exclude'    => get_option( 'default_category' ),
+                            'orderby'    => 'count',
+                            'order'      => 'DESC',
+                        ] );
+                    } else {
+                        $lp_sidebar_cats = get_categories( [
+                            'hide_empty' => false,
+                            'exclude'    => get_option( 'default_category' ),
+                            'orderby'    => 'name',
+                            'order'      => 'ASC',
+                        ] );
+                    }
                     if ( ! empty( $lp_sidebar_cats ) ) : ?>
                     <ul class="lp-cat-list">
                         <?php foreach ( $lp_sidebar_cats as $lp_sc ) : ?>
@@ -1515,49 +1713,7 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                         <span class="ml-auto text-[10px] font-normal text-slate-400 tracking-wide">HOT</span>
                     </h3>
                     <?php
-                    /* ── 많이 본 뉴스 : 해커뉴스 랭킹 공식 ────────────────────
-                     *  score = (p - 1) / (t + 2)^g
-                     *    p : 조회수(lara_post_views), 최솟값 1
-                     *    t : 발행 후 경과 시간(시간 단위)
-                     *    g : gravity 상수 — 높을수록 오래된 기사가 빠르게 하락
-                     *  결과는 10분 Transient 캐시에 저장해 DB 부하를 최소화.
-                     * ──────────────────────────────────────────────────────── */
-                    $lp_hot_cache_key = 'lp_hot_news_v2';
-                    $lp_hot_list      = get_transient( $lp_hot_cache_key );
-
-                    if ( $lp_hot_list === false ) {
-                        $lp_gravity  = 1.8;
-                        $lp_now      = time();
-                        $lp_pool_q   = new WP_Query( [
-                            'post_type'              => 'post', /* 라라프레스 게시판(lara_post) 제외, WP 기사만 */
-                            'post_status'            => 'publish',
-                            'posts_per_page'         => 200,
-                            'date_query'             => [ [ 'after' => '90 days ago' ] ],
-                            'no_found_rows'          => true,   // COUNT(*) 생략으로 속도 향상
-                            'update_post_meta_cache' => true,   // 메타 일괄 로드 (쿼리 1회)
-                            'update_post_term_cache' => false,  // 태그/카테고리 캐시 불필요
-                        ] );
-
-                        $lp_scored = [];
-                        foreach ( $lp_pool_q->posts as $lp_p ) {
-                            $lp_views    = max( 1, (int) get_post_meta( $lp_p->ID, 'lara_post_views', true ) );
-                            $lp_hours    = max( 0, ( $lp_now - strtotime( $lp_p->post_date_gmt ) ) / 3600 );
-                            $lp_scored[ $lp_p->ID ] = ( $lp_views - 1 ) / pow( $lp_hours + 2, $lp_gravity );
-                        }
-                        wp_reset_postdata();
-
-                        arsort( $lp_scored );
-                        $lp_hot_list = [];
-                        foreach ( array_slice( array_keys( $lp_scored ), 0, 5, true ) as $lp_id ) {
-                            $lp_hot_list[] = [
-                                'title' => get_the_title( $lp_id ),
-                                'url'   => get_permalink( $lp_id ),
-                                'views' => number_format( (int) get_post_meta( $lp_id, 'lara_post_views', true ) ),
-                                'score' => round( $lp_scored[ $lp_id ], 3 ),
-                            ];
-                        }
-                        set_transient( $lp_hot_cache_key, $lp_hot_list, 10 * MINUTE_IN_SECONDS );
-                    }
+                    $lp_hot_list = lp_hot_news_list(); // 조회 40% · 반응 50% · 공유 10%
                     ?>
                     <?php if ( $lp_hot_list ) : ?>
                     <ol class="space-y-3 text-sm text-slate-600">
@@ -1580,6 +1736,9 @@ if ( $current_theme_style === 'amber-journal' ) : ?>
                     <p class="text-sm text-slate-400 text-center py-4">아직 데이터가 없습니다.</p>
                     <?php endif; ?>
                 </div>
+
+                <!-- 인기 검색어 -->
+                <?php echo lp_popular_keywords_widget_html(); ?>
 
                 <?php $lp_banner_side = get_theme_mod( 'lp_banner_side', '' ); ?>
                 <?php if ( ! empty( $lp_banner_side ) ) : ?>

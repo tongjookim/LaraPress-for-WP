@@ -1,5 +1,6 @@
-/* LaraPress 홈 화면 레이아웃 빌더 — Customizer 전용
- * 의존: jQuery, jQuery UI Sortable, wp.customize
+/* LaraPress 홈 화면 레이아웃 빌더 — 커스터마이저 · 알림판 "테마 설정" 페이지 공용
+ * 의존: jQuery, jQuery UI Sortable (커스터마이저에서는 wp.customize 도 사용)
+ * 저장소: 커스터마이저에서는 wp.customize 설정, 테마 설정 페이지에서는 숨은 입력란(#lp_home_widgets)
  * View 1 (main): 전체 항목 목록
  * View 2 (section): 특정 섹션 그룹 상세
  */
@@ -11,6 +12,9 @@
     var widgets    = [];
     var activeSectionIdx = null; // null=main, number=section detail
 
+    // 커스터마이저 여부 (customize-controls 가 로드되면 wp.customize.Control 이 있다)
+    var inCustomizer = !!(window.wp && wp.customize && wp.customize.Control);
+
     /* ── 유틸 ───────────────────────────────��────────── */
 
     function getCategories() {
@@ -18,14 +22,24 @@
             ? window.lpWidgetData.categories
             : [{ id: '0', name: '전체 (모든 카테고리)' }];
     }
+    function readValue() {
+        return inCustomizer ? wp.customize(SETTING_ID).get() : $('#' + SETTING_ID).val();
+    }
+    function writeValue(json) {
+        if (inCustomizer) {
+            wp.customize(SETTING_ID).set(json);
+        } else {
+            $('#' + SETTING_ID).val(json).trigger('change');
+        }
+    }
     function saveWidgets() {
         isUpdating = true;
-        wp.customize(SETTING_ID).set(JSON.stringify(widgets));
+        writeValue(JSON.stringify(widgets));
         isUpdating = false;
     }
     function reloadWidgets() {
         try {
-            var p = JSON.parse(wp.customize(SETTING_ID).get());
+            var p = JSON.parse(readValue());
             widgets = Array.isArray(p) ? p : defaultState();
         } catch (e) {
             widgets = defaultState();
@@ -345,18 +359,23 @@
     /* ── 진입점 ───────────────────────────────────────── */
 
     $(function () {
-        wp.customize(SETTING_ID, function (setting) {
+        if (inCustomizer) {
+            wp.customize(SETTING_ID, function (setting) {
+                reloadWidgets();
+                renderMainView();
+                setting.bind(function () {
+                    if (!isUpdating) {
+                        reloadWidgets();
+                        // 외부 변경(undo 등)시 메인으로 복귀
+                        navigateBack();
+                        renderMainView();
+                    }
+                });
+            });
+        } else if ($('#lp-layout-builder').length) {
             reloadWidgets();
             renderMainView();
-            setting.bind(function () {
-                if (!isUpdating) {
-                    reloadWidgets();
-                    // 외부 변경(undo 등)시 메인으로 복귀
-                    navigateBack();
-                    renderMainView();
-                }
-            });
-        });
+        }
 
         /* 뒤로 버튼 */
         $(document).on('click', '#lp-back-btn', function (e) {

@@ -1,0 +1,68 @@
+/* LaraPress 알림판 "테마 설정" 페이지 */
+
+.larapress-theme-settings .nav-tab-wrapper { margin-bottom: 16px; }
+
+/* 섹션 카드 */
+.lp-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    padding: 4px 20px 8px;
+    margin: 0 0 16px;
+    max-width: 1100px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+}
+.lp-card h2 {
+    font-size: 15px;
+    margin: 16px 0 4px;
+}
+.lp-card__desc { margin: 0 0 4px; color: #50575e; }
+.lp-card .form-table th { width: 220px; }
+
+/* 코어 .form-table td fieldset label(inline-block) 보다 우선 — 선택지를 한 줄에 하나씩 */
+.lp-card .form-table td fieldset label.lp-radio { display: block; margin: 0 0 8px !important; }
+
+/* 이미지·아이콘 선택 */
+.lp-media__preview {
+    display: inline-block;
+    margin: 0 0 8px;
+    padding: 8px;
+    background: repeating-conic-gradient(#f0f0f1 0% 25%, #fff 0% 50%) 50% / 16px 16px; /* 투명 배경 표시 */
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+}
+.lp-media__preview[hidden] { display: none; }
+.lp-media__preview img { display: block; max-width: 320px; max-height: 120px; }
+.lp-media--icon .lp-media__preview img { width: 64px; height: 64px; object-fit: contain; }
+.lp-media .button-link { margin-left: 8px; color: #b32d2e; }
+
+/* 아카이브 목록 스타일 선택 (커스터마이저 LP_Archive_Style_Control 과 같은 모양) */
+.lp-asp-picker {
+    display: grid;
+    grid-template-columns: repeat(4, 140px);
+    gap: 10px;
+}
+.lp-asp-label { cursor: pointer; text-align: center; position: relative; }
+.lp-asp-label input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.lp-asp-preview {
+    display: block;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 6px 6px;
+    background: #fafafa;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.lp-asp-preview svg { width: 100%; height: auto; display: block; }
+.lp-asp-label:hover .lp-asp-preview { border-color: #2271b1; background: #f0f6fc; }
+.lp-asp-label input:checked ~ .lp-asp-preview { border-color: #2271b1; box-shadow: 0 0 0 2px #bcd1e8; background: #f0f6fc; }
+.lp-asp-label input:focus-visible ~ .lp-asp-preview { outline: 2px solid #2271b1; outline-offset: 2px; }
+.lp-asp-label-text { display: block; font-size: 12px; font-weight: 600; color: #1d2327; margin-top: 6px; }
+.lp-asp-label-desc { display: block; font-size: 11px; color: #646970; }
+
+/* 홈 화면 위젯 빌더 — 커스터마이저 사이드바 폭에 맞춰 만든 UI 라 폭을 고정한다 */
+.lp-builder-wrap { max-width: 420px; }
+
+@media (max-width: 782px) {
+    .lp-asp-picker { grid-template-columns: repeat(2, 1fr); }
+    .lp-card { padding: 4px 12px 8px; }
+}

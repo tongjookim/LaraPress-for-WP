@@ -97,7 +97,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         }
         #lp-sticky-bar .lp-sb-inner {
             display: flex; align-items: center; gap: 0.5rem;
-            height: 48px; padding: 0 1rem;
+            height: 64px; padding: 0 1rem;
             position: relative; z-index: 2;
         }
         #lp-sticky-bar .lp-sb-logo {
@@ -139,7 +139,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             width: 1px; height: 16px; background: #e2e8f0; flex-shrink: 0; margin: 0 0.125rem;
         }
 
-        /* ── CSS 3D 글래스 큐브 Hero ───────────────── */
+        /* ── 하단 Hero (2D 일러스트) ───────────────── */
         .lp-hero {
             background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 55%, #0f172a 100%);
             padding: 3.5rem 1.5rem;
@@ -157,7 +157,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             background: radial-gradient(ellipse 60% 80% at 70% 50%, rgba(37,99,235,0.15) 0%, transparent 70%);
             pointer-events: none;
         }
-        .lp-hero__text { position: relative; z-index: 1; max-width: 420px; }
+        .lp-hero__text { position: relative; z-index: 1; max-width: 460px; word-break: keep-all; }
         .lp-hero__eyebrow {
             display: inline-block;
             font-size: 0.7rem;
@@ -184,70 +184,57 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             color: #94a3b8;
             line-height: 1.6;
         }
-        .lp-cube-scene {
-            perspective: 700px;
+        /* 일러스트(사실적 SVG): 자체 배경(회벽·보도)이 있어 어두운/밝은(클래식) 스킨 모두에서 같게 보인다 */
+        .lp-illust {
             position: relative;
             z-index: 1;
-            flex-shrink: 0;
+            flex: 0 1 460px;
+            width: min(460px, 100%);
+            border-radius: 26px;
+            box-shadow: 0 18px 44px rgba(2,6,23,0.35);
         }
-        .lp-cube {
-            width: 120px;
-            height: 120px;
-            position: relative;
-            transform-style: preserve-3d;
-            animation: lp-spin 9s linear infinite;
+        .lp-illust__svg { display: block; width: 100%; height: auto; border-radius: 26px; }
+        @media (prefers-reduced-motion: no-preference) {
+            .lp-ill-hammer { transform-origin: 22px -160px; animation: lp-ill-hammer 1.1s ease-in-out infinite; }
         }
-        @keyframes lp-spin {
-            0%   { transform: rotateX(-20deg) rotateY(0deg); }
-            100% { transform: rotateX(-20deg) rotateY(360deg); }
+        @keyframes lp-ill-hammer { 0%,100% { transform: rotate(-14deg); } 50% { transform: rotate(10deg); } }
+        @media (max-width: 640px) {
+            .lp-hero { gap: 2rem; flex-direction: column; padding: 2.5rem 1.5rem; text-align: center; }
+            .lp-illust { flex-basis: auto; width: min(420px, 100%); }
         }
-        .lp-face {
-            position: absolute;
-            width: 120px;
-            height: 120px;
+
+        /* ── TOP TOP 버튼 (맨 위로 스크롤) — 전 스킨 공통 ───── */
+        .lp-totop {
+            position: fixed;
+            right: 1.5rem;
+            bottom: 1.5rem;
+            z-index: 55;
+            width: 46px;
+            height: 46px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
-            font-weight: 900;
-            letter-spacing: 0.15em;
-            color: rgba(255,255,255,0.88);
-            text-shadow: 0 0 18px rgba(96,165,250,0.9);
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.18);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            box-shadow: inset 0 0 20px rgba(255,255,255,0.04), 0 0 15px rgba(37,99,235,0.1);
-        }
-        .lp-face--front  { transform: translateZ(60px); }
-        .lp-face--back   { transform: rotateY(180deg) translateZ(60px); }
-        .lp-face--right  { transform: rotateY(90deg)  translateZ(60px); }
-        .lp-face--left   { transform: rotateY(-90deg) translateZ(60px); }
-        .lp-face--top    { transform: rotateX(90deg)  translateZ(60px); }
-        .lp-face--bottom { transform: rotateX(-90deg) translateZ(60px); }
-        .lp-cube-glow {
-            position: absolute;
-            inset: -20px;
+            border: none;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(37,99,235,0.18) 0%, transparent 70%);
-            animation: lp-glow-pulse 3s ease-in-out infinite alternate;
+            background: #7400AD; /* 업로드 로고(logo_CRpurple.svg) 컬러 */
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(116,0,173,0.35);
+            cursor: pointer;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(12px);
+            transition: opacity 0.25s ease, transform 0.25s ease, background 0.2s ease, box-shadow 0.2s ease;
         }
-        @keyframes lp-glow-pulse {
-            from { opacity: 0.5; transform: scale(0.95); }
-            to   { opacity: 1;   transform: scale(1.05); }
-        }
+        .lp-totop.is-visible { opacity: 1; visibility: visible; transform: translateY(0); }
+        .lp-totop:hover { background: #5c008a; box-shadow: 0 6px 18px rgba(116,0,173,0.45); }
+        .lp-totop svg { width: 20px; height: 20px; pointer-events: none; }
+        html.dark .lp-totop { background: #9b33d1; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+        html.dark .lp-totop:hover { background: #b658e0; }
         @media (max-width: 640px) {
-            .lp-hero { gap: 2rem; flex-direction: column; padding: 2.5rem 1.5rem; text-align: center; }
-            .lp-cube { width: 90px; height: 90px; }
-            .lp-face { width: 90px; height: 90px; font-size: 0.65rem; }
-            .lp-face--front,.lp-face--back,.lp-face--right,.lp-face--left,
-            .lp-face--top,.lp-face--bottom { transform-origin: center; }
-            .lp-face--front  { transform: translateZ(45px); }
-            .lp-face--back   { transform: rotateY(180deg) translateZ(45px); }
-            .lp-face--right  { transform: rotateY(90deg)  translateZ(45px); }
-            .lp-face--left   { transform: rotateY(-90deg) translateZ(45px); }
-            .lp-face--top    { transform: rotateX(90deg)  translateZ(45px); }
-            .lp-face--bottom { transform: rotateX(-90deg) translateZ(45px); }
+            .lp-totop { right: 1rem; bottom: 1rem; width: 42px; height: 42px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .lp-totop { transition: opacity 0.25s ease, visibility 0.25s ease; }
         }
 
         /* ══════════════════════════════════════════════════
@@ -552,13 +539,23 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             border-bottom-color: #000 !important;
             border-bottom-width: 2px !important;
         }
+        /* 본문 내 이미지 캡션(figcaption / 워드프레스 레거시 wp-caption) 공통 스타일 */
+        #lp-article-body figure figcaption,
+        #lp-article-body .wp-caption-text {
+            font-size: 0.8rem;
+            color: #64748b;
+            text-align: center;
+            margin-top: 0.5rem;
+            line-height: 1.5;
+        }
+        #lp-article-body .wp-caption { max-width: 100%; }
         .nyt-skin #lp-article-body {
             font-family: Georgia, 'Times New Roman', serif !important;
             font-size: 1.125rem !important;
             line-height: 1.9 !important;
             color: #121212 !important;
         }
-        .nyt-skin #lp-article-body p { margin-bottom: 1.5rem; }
+        .nyt-skin #lp-article-body p { margin-bottom: 2rem; }
         .nyt-skin #lp-article-body figure figcaption {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 0.75rem;
@@ -573,9 +570,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             border-radius: 0 !important;
             border: 1px solid #ddd !important;
         }
-        .nyt-skin .lp-rx-btn { border-radius: 0 !important; }
-        .nyt-skin .lp-rx-btn.border-blue-500 { border-color: #000 !important; }
-        .nyt-skin .lp-rx-btn.border-blue-500 .lp-rx-count { color: #121212 !important; }
+        /* nyt-skin .lp-rx-btn 오버라이드는 반응 버튼 CSS 블록에 통합됨 */
 
         /* ── NYT 사이드바 ────────────────────────────────── */
         .nyt-sidebar > div {
@@ -644,7 +639,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             letter-spacing: -0.02em;
         }
 
-        /* ── Classic 스킨 — 히어로 큐브 오버라이드 ─────── */
+        /* ── Classic 스킨 — 히어로 오버라이드 ─────── */
         .nyt-skin .lp-hero {
             background: #fff;
             border-top: 4px solid #000;
@@ -677,22 +672,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             font-size: 0.875rem;
             line-height: 1.75;
         }
-        .nyt-skin .lp-face {
-            background: #111;
-            color: #f5f0e8;
-            border: 1px solid rgba(255,255,255,0.12);
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-            text-shadow: none;
-            box-shadow: none;
-            font-family: 'Times New Roman', Georgia, serif;
-            letter-spacing: 0.12em;
-            font-size: 0.72rem;
-        }
-        .nyt-skin .lp-cube-glow { display: none; }
-        .nyt-skin .lp-cube-scene {
-            filter: drop-shadow(4px 8px 24px rgba(0,0,0,0.22));
-        }
+        .nyt-skin .lp-illust { box-shadow: 4px 8px 24px rgba(0,0,0,0.22); }
         @media (max-width: 640px) {
             .nyt-skin .lp-hero {
                 flex-direction: column-reverse;
@@ -724,6 +704,28 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         .lp-cf-head-inner { display: flex; align-items: center; justify-content: space-between; }
         .lp-cf-logo-link { text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
         .lp-cf-logo-link img { height: 36px; width: auto; }
+        .basic-footer-logo img,
+        .aj-footer-logo-text img,
+        .lp-swn-footer-logo img { height: 32px; width: auto; }
+
+        /* 문의(Contact) 페이지 — Fluent Forms "SUBMIT NOW" 버튼 색상 */
+        .lp-contact-page button[type="submit"] {
+            background: #1d4ed8 !important;
+            color: #fff !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 0.75rem 2.25rem !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.1s ease;
+        }
+        .lp-contact-page button[type="submit"]:hover {
+            background: #1e40af !important;
+            transform: translateY(-1px);
+        }
+        .swn-skin .lp-contact-page button[type="submit"] { background: var(--swn-primary) !important; }
+        .swn-skin .lp-contact-page button[type="submit"]:hover { background: var(--swn-secondary) !important; }
         .lp-cf-sitename {
             font-family: 'Times New Roman', Georgia, serif;
             font-size: 1.5rem; font-weight: 700; color: #000; letter-spacing: -0.02em;
@@ -859,6 +861,107 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             background: #2563eb; color: #fff;
             border-radius: 9999px; font-size: 0.72rem; font-weight: 700;
         }
+
+        /* ── 기사 반응 버튼 ─────────────────────────────── */
+        .lp-reactions {
+            margin: 1.75rem 0;
+            padding: 1.25rem 1rem 1rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            text-align: center;
+        }
+        .lp-rx-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #94a3b8;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 0.875rem;
+        }
+        .lp-rx-btns {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .lp-rx-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.2rem;
+            padding: 0.625rem 0.875rem;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, transform 0.12s, box-shadow 0.15s;
+            min-width: 72px;
+            flex: 0 1 auto;
+            user-select: none;
+        }
+        .lp-rx-btn:hover {
+            border-color: #93c5fd;
+            background: #eff6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59,130,246,0.12);
+        }
+        .lp-rx-btn.is-reacted {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 2px 8px rgba(59,130,246,0.15);
+        }
+        .lp-rx-btn:active { transform: translateY(0); }
+        .lp-rx-emoji { font-size: 1.375rem; line-height: 1.2; }
+        .lp-rx-name  { font-size: 0.68rem; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .lp-rx-count { font-size: 0.72rem; font-weight: 700; color: #cbd5e1; min-height: 1em; }
+        .lp-rx-btn.is-reacted .lp-rx-name  { color: #2563eb; }
+        .lp-rx-btn.is-reacted .lp-rx-count { color: #3b82f6; }
+        /* NYT 스킨 — 반응 버튼 오버라이드 */
+        .nyt-skin .lp-rx-btn { border-radius: 0 !important; }
+        .nyt-skin .lp-rx-btn.is-reacted { border-color: #000 !important; background: #f5f5f5 !important; }
+        .nyt-skin .lp-rx-btn.is-reacted .lp-rx-name  { color: #121212 !important; }
+        .nyt-skin .lp-rx-btn.is-reacted .lp-rx-count { color: #121212 !important; }
+        /* AJ 스킨 — 반응 버튼 */
+        .aj-reactions {
+            margin: 1.75rem 0;
+            padding: 1.125rem 1rem 1rem;
+            background: var(--aj-stone);
+            border: 1px solid var(--aj-border);
+            border-radius: 10px;
+            text-align: center;
+        }
+        .aj-reactions .lp-rx-btn {
+            background: #fff;
+            border-color: var(--aj-border);
+        }
+        .aj-reactions .lp-rx-btn:hover {
+            border-color: var(--aj-amber);
+            background: var(--aj-amber-lite);
+            box-shadow: 0 4px 12px rgba(217,119,6,0.12);
+        }
+        .aj-reactions .lp-rx-btn.is-reacted {
+            border-color: var(--aj-amber);
+            background: var(--aj-amber-lite);
+            box-shadow: 0 2px 8px rgba(217,119,6,0.15);
+        }
+        .aj-reactions .lp-rx-btn.is-reacted .lp-rx-name  { color: var(--aj-amber-dark); }
+        .aj-reactions .lp-rx-btn.is-reacted .lp-rx-count { color: var(--aj-amber); }
+        /* 다크모드 — 반응 버튼 */
+        html.dark .lp-reactions { background: #182030; border-color: #334155; }
+        html.dark .lp-rx-btn { background: #1e293b; border-color: #334155; }
+        html.dark .lp-rx-btn:hover { background: #1e3a5f; border-color: #60a5fa; box-shadow: 0 4px 12px rgba(96,165,250,0.12); }
+        html.dark .lp-rx-btn.is-reacted { background: #1e3a5f; border-color: #3b82f6; }
+        html.dark .lp-rx-name  { color: #94a3b8; }
+        html.dark .lp-rx-count { color: #475569; }
+        html.dark .lp-rx-btn.is-reacted .lp-rx-name  { color: #93c5fd; }
+        html.dark .lp-rx-btn.is-reacted .lp-rx-count { color: #60a5fa; }
+        html.dark .aj-reactions { background: #1c1410; border-color: #3d3028; }
+        html.dark .aj-reactions .lp-rx-btn { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-reactions .lp-rx-btn:hover { background: rgba(217,119,6,0.1); border-color: var(--aj-amber); box-shadow: none; }
+        html.dark .aj-reactions .lp-rx-btn.is-reacted { background: rgba(217,119,6,0.12); border-color: var(--aj-amber); }
+        html.dark .aj-reactions .lp-rx-btn.is-reacted .lp-rx-name  { color: var(--aj-amber); }
+        html.dark .aj-reactions .lp-rx-btn.is-reacted .lp-rx-count { color: var(--aj-amber); }
 
         /* 댓글 목록 */
         .lp-cmts-list { list-style: none !important; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
@@ -1071,9 +1174,16 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
 
         /* 모바일 드롭다운 — 전역 기본값 숨김 */
         .lp-mobile-nav { display: none; }
+        .lp-gnav-swn { position: relative; }
 
         @media (max-width: 767px) {
             .lp-hamburger { display: flex; }
+            /* SWN: 햄버거가 헤더 줄로 이동해 nav 줄엔 숨겨진 데스크톱 메뉴만 남음 — 패딩 접고 그림자 제거 */
+            .lp-gnav-swn .primary-menu-container { padding-top: 0; padding-bottom: 0; gap: 0; }
+            .lp-gnav-swn { box-shadow: none; }
+            /* 다국어 버튼: 모바일에서는 아이콘만 (다크모드/햄버거와 동일한 36px 정사각形) */
+            .lp-lang-btn { width: 36px; padding: 0; gap: 0; }
+            .lp-lang-current { display: none; }
             .lp-mobile-nav {
                 position: absolute;
                 top: 100%;
@@ -2047,6 +2157,8 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
             border-radius: 8px; overflow: hidden;
         }
         .aj-single-hero { width: 100%; max-height: 420px; object-fit: cover; display: block; }
+        .aj-single-hero-figure { margin: 0; }
+        .aj-hero-caption { font-size: 0.8rem; color: var(--aj-muted); text-align: center; padding: 0.5rem 1.25rem 0; }
         .aj-single-body { padding: 1.75rem; }
         .aj-single-kicker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.875rem; }
         .aj-single-title {
@@ -2066,7 +2178,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         .aj-article-content {
             font-size: 1.0rem; line-height: 1.9; color: #222;
         }
-        .aj-article-content > * + * { margin-top: 1.1rem; }
+        .aj-article-content > * + * { margin-top: 1.7rem; }
         .aj-article-content h2 { font-size: 1.25rem; font-weight: 800; color: #111; margin-top: 2rem; }
         .aj-article-content h3 { font-size: 1.05rem; font-weight: 700; margin-top: 1.5rem; }
         .aj-article-content img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.75rem 0; }
@@ -2080,6 +2192,13 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         .aj-article-content li { margin-bottom: 0.35rem; }
         .aj-article-content figure { margin: 1.25rem 0; }
         .aj-article-content figcaption { font-size: 0.8rem; color: var(--aj-muted); margin-top: 0.4rem; text-align: center; }
+        /* About Us(753페이지) 보정 — 공용 .aj-article-content 스타일(링크 밑줄, 이미지 height:auto)이
+           버튼형 링크·원형 프로필 사진에 그대로 적용되는 것을 막는다. */
+        body.page-id-753 .lp-about-page a { text-decoration: none; }
+        body.page-id-753 .lp-about-page .lp-team-card { text-align: center; }
+        body.page-id-753 .lp-about-page .lp-team-card img {
+            width: 6rem; height: 6rem; margin: 0 auto 0.75rem;
+        }
         /* 이전/다음 네비 */
         .aj-single-nav {
             display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
@@ -2148,9 +2267,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         }
         .lp-dm-btn:hover { background: rgba(128,128,128,0.12); }
         .lp-dm-icon { pointer-events: none; display: block; }
-        .lp-dm-sun { display: none; }
-        html.dark .lp-dm-moon { display: none; }
-        html.dark .lp-dm-sun  { display: block; }
+        .lp-dm-sun { display: none; } /* 초기값: 라이트모드에서 태양 숨김 (다크모드 블록에서 토글) */
 
         /* NYT 스킨 버튼 — nyt-search-btn 스타일 일치 */
         .nyt-skin .lp-dm-btn {
@@ -2176,166 +2293,580 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
 
         /* SWN 다크버튼 (헤더 배너 옆) */
         .lp-swn-dm-wrap {
-            display: none; align-items: center;
+            display: flex; align-items: center;
         }
-        @media (min-width: 768px) { .lp-swn-dm-wrap { display: flex; } }
+        .lp-swn-header-right { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+        .lp-swn-header-right .lp-hamburger { margin-left: 0; }
         .lp-swn-dm-wrap .lp-dm-btn { color: #475569; }
         .lp-swn-dm-wrap .lp-dm-btn:hover { background: #f1f5f9; }
+
+        /* 다국어 전환 버튼 (SWN, 다크모드 버튼 옆) */
+        .lp-lang-switcher { position: relative; }
+        .lp-lang-btn {
+            width: auto; padding: 0 0.5rem; gap: 0.3rem;
+            color: #475569; font-weight: 700; font-size: 0.8125rem;
+        }
+        .lp-lang-btn:hover { background: #f1f5f9; }
+        .lp-lang-current { letter-spacing: 0.02em; }
+        .lp-lang-menu {
+            display: none;
+            position: absolute; top: calc(100% + 8px); right: 0;
+            min-width: 150px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            padding: 0.375rem; margin: 0; list-style: none;
+            z-index: 110;
+        }
+        .lp-lang-menu.is-open { display: block; }
+        .lp-lang-menu li a {
+            display: block; padding: 0.5rem 0.625rem; border-radius: 6px;
+            font-size: 0.875rem; font-weight: 600; color: #334155; text-decoration: none;
+            transition: background 0.12s;
+        }
+        .lp-lang-menu li a:hover { background: #f1f5f9; }
+        .lp-lang-menu li a.is-current { color: var(--swn-primary, #7400ad); background: #f6ecfb; }
+        html.dark .lp-lang-btn { color: #94a3b8; }
+        html.dark .lp-lang-btn:hover { background: #334155; color: #e2e8f0; }
+        html.dark .lp-lang-menu { background: #1e293b; border-color: #334155; }
+        html.dark .lp-lang-menu li a { color: #cbd5e1; }
+        html.dark .lp-lang-menu li a:hover { background: #334155; }
+        html.dark .lp-lang-menu li a.is-current { color: #d8b4fe; background: #334155; }
+
+        /* ══════════════════════════════════════════════════════
+           유저 메뉴 (로그인/회원가입 · 내 프로필/내 기사 목록)
+           — 다크모드 토글 버튼 옆에 위치. lp-dm-btn 클래스를 공유해
+             스킨별 버튼 테두리/색상(위 다크모드 버튼 규칙)을 그대로 상속받는다.
+           ══════════════════════════════════════════════════════ */
+        .lp-user-menu { position: relative; }
+        .lp-user-avatar {
+            display: flex; align-items: center; justify-content: center;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: var(--swn-primary, #2563eb); color: #fff;
+            font-weight: 800; font-size: 0.875rem; line-height: 1;
+            pointer-events: none;
+        }
+        .amber-skin .lp-user-avatar { width: 20px; height: 20px; font-size: 0.75rem; }
+        .lp-user-dropdown {
+            display: none;
+            position: absolute; top: calc(100% + 8px); right: 0;
+            min-width: 170px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            padding: 0.375rem; margin: 0; list-style: none;
+            z-index: 110;
+        }
+        .lp-user-dropdown.is-open { display: block; }
+        .lp-user-dropdown__name {
+            padding: 0.5rem 0.625rem 0.25rem;
+            font-size: 0.8125rem; font-weight: 700; color: #64748b;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .lp-user-dropdown li a {
+            display: block; padding: 0.5rem 0.625rem; border-radius: 6px;
+            font-size: 0.875rem; font-weight: 600; color: #334155; text-decoration: none;
+            white-space: nowrap;
+            transition: background 0.12s;
+        }
+        .lp-user-dropdown li a:hover { background: #f1f5f9; }
+        html.dark .lp-user-dropdown { background: #1e293b; border-color: #334155; }
+        html.dark .lp-user-dropdown__name { color: #94a3b8; }
+        html.dark .lp-user-dropdown li a { color: #cbd5e1; }
+        html.dark .lp-user-dropdown li a:hover { background: #334155; }
+        /* SWN 헤더 우측 영역 — 다크모드 버튼과 동일한 색상 적용 */
+        .lp-swn-header-right .lp-user-btn { color: #475569; }
+        .lp-swn-header-right .lp-user-btn:hover { background: #f1f5f9; }
+        html.dark .lp-swn-header-right .lp-user-btn { color: #94a3b8; }
+        html.dark .lp-swn-header-right .lp-user-btn:hover { background: #334155; color: #e2e8f0; }
 
         /* ══════════════════════════════════════════════════════
            다크모드 오버라이드
            ══════════════════════════════════════════════════════ */
 
-        /* — SWN (Fresh) */
+        /* ── 부드러운 전환 ── */
+        body,
+        .nyt-masthead, .nyt-masthead-logo, .nyt-nav,
+        .basic-logo, .basic-header-main, .basic-nav, .basic-content-area, .basic-skin main,
+        .aj-masthead, .aj-gnav, .aj-widget, .aj-widget-block, .aj-featured-section,
+        .aj-single, .aj-single-article, .aj-comment-body, .aj-comment-form-wrap,
+        .bg-white, .bg-slate-50, .bg-slate-100 {
+            transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+
+        /* ── 다크/라이트 아이콘 ── */
+        .lp-dm-moon { display: block; }
+        .lp-dm-sun  { display: none; }
+        html.dark .lp-dm-moon { display: none; }
+        html.dark .lp-dm-sun  { display: block; }
+
+        /* ── 다크/라이트 로고 전환 (헤더·푸터 공통) — 다크모드 전용 로고가 업로드된 경우에만 두 개가 함께 출력됨 */
+        .lp-logo-light-img { display: block !important; }
+        .lp-logo-dark-img  { display: none !important; }
+        html.dark .lp-logo-light-img { display: none !important; }
+        html.dark .lp-logo-dark-img  { display: block !important; }
+
+        /* ── 특성 이미지가 없는 글의 대체 썸네일(기본 로고) ──
+           원본 사진용 object-fit:cover 인라인 스타일보다 우선 적용되도록 !important 사용.
+           로고는 와이드 워드마크라 cover로 채우면 잘려 보이므로 contain + 여백 배경으로 표시. */
+        .lp-thumb-fallback-logo {
+            object-fit: contain !important;
+            background: #f8fafc;
+            padding: 12%;
+            box-sizing: border-box;
+        }
+        html.dark .lp-thumb-fallback-logo { background: #1e293b; }
+
+        /* ════════════════════════════════════════════════════
+           SWN (Fresh) 다크모드
+           ════════════════════════════════════════════════════ */
         html.dark body { background: #0f172a; color: #e2e8f0; }
-        html.dark .bg-white  { background: #1e293b !important; }
-        html.dark .bg-slate-50  { background: #182030 !important; }
-        html.dark .bg-slate-100 { background: #243044 !important; }
-        html.dark .bg-slate-900 { background: #020617 !important; }
-        /* 텍스트 색상 전역 오버라이드 */
-        html.dark .text-slate-900 { color: #f1f5f9 !important; }
-        html.dark .text-slate-800 { color: #e2e8f0 !important; }
-        html.dark .text-slate-700 { color: #cbd5e1 !important; }
-        html.dark .text-slate-600 { color: #94a3b8 !important; }
-        html.dark .text-slate-500 { color: #94a3b8 !important; }
-        html.dark .text-slate-400 { color: #64748b !important; }
-        /* 파란색 계열 → 밝은 블루로 */
-        html.dark .text-blue-700 { color: #93c5fd !important; }
-        html.dark .text-blue-600 { color: #60a5fa !important; }
-        html.dark .text-blue-500 { color: #93c5fd !important; }
+        html.dark .bg-white        { background: #1e293b !important; }
+        html.dark .bg-slate-50     { background: #182030 !important; }
+        html.dark .bg-slate-100    { background: #243044 !important; }
+        html.dark .bg-slate-900    { background: #020617 !important; }
+        /* 텍스트 */
+        html.dark .text-slate-900  { color: #f1f5f9  !important; }
+        html.dark .text-slate-800  { color: #e2e8f0  !important; }
+        html.dark .text-slate-700  { color: #cbd5e1  !important; }
+        html.dark .text-slate-600  { color: #94a3b8  !important; }
+        html.dark .text-slate-500  { color: #94a3b8  !important; }
+        html.dark .text-slate-400  { color: #64748b  !important; }
+        html.dark .text-blue-700   { color: #93c5fd  !important; }
+        html.dark .text-blue-600   { color: #60a5fa  !important; }
+        html.dark .text-blue-500   { color: #93c5fd  !important; }
         /* 경계선 */
         html.dark .border-slate-200 { border-color: #334155 !important; }
         html.dark .border-slate-100 { border-color: #1e293b !important; }
         html.dark .border-slate-800 { border-color: #1e293b !important; }
         html.dark .border-slate-900 { border-color: #e2e8f0 !important; }
-        /* Breaking News 섹션 헤더 */
-        html.dark .lp-section-head { color: #f1f5f9; }
-        /* 위젯 컨테이너 shadow 숨김 */
-        html.dark .shadow-sm { box-shadow: none !important; }
-        /* 위젯 그룹 호버 링크 */
+        html.dark .shadow-sm        { box-shadow: none !important; }
+        /* 호버 링크 */
         html.dark .group:hover .group-hover\:text-blue-600 { color: #60a5fa !important; }
         html.dark a.hover\:text-blue-600:hover { color: #60a5fa !important; }
         html.dark a.hover\:text-blue-500:hover { color: #93c5fd !important; }
         /* SWN 내비 */
         html.dark #lp-gnav { background: #1e293b !important; border-color: #334155 !important; }
-        html.dark .primary-menu-container ul a { color: #cbd5e1; }
+        html.dark .primary-menu-container ul a       { color: #cbd5e1; }
         html.dark .primary-menu-container ul a:hover { color: #93c5fd; }
-        html.dark .lp-swn-dm-wrap .lp-dm-btn { color: #94a3b8; }
+        html.dark .lp-swn-dm-wrap .lp-dm-btn       { color: #94a3b8; }
         html.dark .lp-swn-dm-wrap .lp-dm-btn:hover { background: #334155; color: #e2e8f0; }
-        /* 기자 프로필 (SWN/NYT/Basic) */
-        html.dark .lp-author-bio { background: #182030 !important; border-color: #334155 !important; }
+        /* Breaking News */
+        html.dark .lp-section-head { color: #f1f5f9; }
+        html.dark .lp-breaking-bar { background: #1e3a5f !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+        /* 기자 프로필 공통 */
+        html.dark .lp-author-bio     { background: #182030 !important; border-color: #334155 !important; }
         html.dark .lp-author-bio img { border-color: #334155 !important; }
 
-        /* — NYT (Classic) */
-        html.dark .nyt-topbar { background: #111; color: #888; border-color: #2a2a2a; }
-        html.dark .nyt-topbar a { color: #888; }
+        /* ════════════════════════════════════════════════════
+           NYT (Classic) 다크모드
+           ════════════════════════════════════════════════════ */
+        html.dark body.nyt-skin      { background: #1a1a1a; color: #d8d8d8; }
+        /* 탑바 */
+        html.dark .nyt-topbar        { background: #111; color: #888; border-color: #2a2a2a; }
+        html.dark .nyt-topbar a      { color: #888; }
         html.dark .nyt-topbar a:hover { color: #ddd; }
-        html.dark .nyt-masthead { background: #111; border-color: #2a2a2a; }
+        /* 마스트헤드 */
+        html.dark .nyt-masthead      { background: #111; border-top-color: #444; border-bottom-color: #444; }
+        html.dark .nyt-masthead-logo { color: #e2e8f0; }
+        html.dark .nyt-masthead-sub  { color: #888; }
         html.dark .nyt-masthead-banner-ph { background: #222; color: #555; border-color: #333; }
-        html.dark .nyt-nav { background: #111 !important; border-color: #2a2a2a !important; }
-        html.dark .nyt-nav a { color: #ccc !important; }
-        html.dark .nyt-nav a:hover { color: #fff !important; }
-        html.dark body.nyt-skin { background: #1a1a1a; color: #d8d8d8; }
-        html.dark .nyt-section-heading { color: #d8d8d8; border-color: #2a2a2a; }
-        html.dark .nyt-search-btn { border-color: #ccc; color: #ccc; }
-        html.dark .nyt-search-btn:hover { background: #ccc; color: #111; }
-        html.dark .nyt-skin .lp-dm-btn { border-color: #ccc; color: #ccc; }
-        html.dark .nyt-skin .lp-dm-btn:hover { background: #ccc; color: #111; }
-        html.dark .nyt-search-modal { background: rgba(0,0,0,0.85); }
-        html.dark .nyt-search-modal-box { background: #111; border-top-color: #fff; }
-        html.dark .nyt-search-label { color: #888; }
-        html.dark .nyt-search-form { border-bottom-color: #fff; }
-        html.dark .nyt-search-input { color: #fff; }
+        /* 내비 */
+        html.dark .nyt-nav           { background: #111 !important; border-color: #2a2a2a !important; }
+        html.dark .nyt-nav a         { color: #ccc !important; }
+        html.dark .nyt-nav a:hover   { color: #fff !important; }
+        /* 검색 */
+        html.dark .nyt-search-btn         { border-color: #aaa; color: #aaa; }
+        html.dark .nyt-search-btn:hover   { background: #aaa; color: #111; }
+        html.dark .nyt-skin .lp-dm-btn    { border-color: #aaa; color: #aaa; }
+        html.dark .nyt-skin .lp-dm-btn:hover { background: #aaa; color: #111; }
+        html.dark .nyt-search-modal       { background: rgba(0,0,0,0.88); }
+        html.dark .nyt-search-modal-box   { background: #1a1a1a; border-top-color: #aaa; }
+        html.dark .nyt-search-label       { color: #888; }
+        html.dark .nyt-search-form        { border-bottom-color: #aaa; }
+        html.dark .nyt-search-input       { color: #e2e8f0; background: transparent; }
+        /* 섹션 제목 */
+        html.dark .nyt-section-heading    { color: #d8d8d8; border-color: #2a2a2a; }
+        /* 홈 콘텐츠 */
+        html.dark .nyt-content-area h2.text-2xl { color: #d8d8d8 !important; border-bottom-color: #555 !important; }
+        html.dark .nyt-content-area h3.text-3xl,
+        html.dark .nyt-content-area h3.text-3xl a { color: #e2e8f0 !important; }
+        html.dark .nyt-content-area h3.text-3xl a:hover { color: #90cdf4 !important; }
+        html.dark .nyt-content-area h3.text-lg,
+        html.dark .nyt-content-area h3.text-lg a { color: #e2e8f0 !important; }
+        html.dark .nyt-content-area h3.text-lg a:hover { color: #90cdf4 !important; }
+        html.dark .nyt-content-area h2.text-xl { color: #d8d8d8 !important; border-bottom-color: #3a3a3a !important; }
+        html.dark .nyt-content-area h2.text-xl span { color: #d8d8d8 !important; }
+        html.dark .nyt-content-area h2.text-xl a { color: #90cdf4 !important; }
+        html.dark .nyt-content-area ul.space-y-3 a { color: #d8d8d8 !important; }
+        html.dark .nyt-content-area ul.space-y-3 a:hover { color: #90cdf4 !important; }
+        html.dark .nyt-content-area ul.space-y-3 li { border-bottom-color: #2a2a2a; }
+        html.dark .nyt-content-area .text-slate-400 { color: #888 !important; }
+        html.dark .nyt-skin .bg-slate-100,
+        html.dark .nyt-content-area .bg-slate-100 { background: #2a2a2a !important; }
+        /* 사이드바 */
+        html.dark .nyt-sidebar > div           { border-top-color: #555 !important; }
+        html.dark .nyt-sidebar h3              { color: #ccc !important; border-bottom-color: #333 !important; }
+        html.dark .nyt-sidebar ol a            { color: #ccc !important; }
+        html.dark .nyt-sidebar ol a:hover      { color: #90cdf4 !important; }
+        html.dark .nyt-sidebar ol li           { border-bottom-color: #2a2a2a; }
+        html.dark .nyt-sidebar input[type="text"] { border-color: #555 !important; background: #222; color: #ddd; }
+        html.dark .nyt-sidebar button[type="submit"] { background: #444 !important; }
+        /* 기사 단일 뷰 */
+        html.dark .nyt-skin article.article-view header .text-blue-600 { color: #aaa !important; }
+        html.dark .nyt-skin article.article-view h1 { color: #e2e8f0; }
+        html.dark .nyt-skin article.article-view header .text-slate-700 { color: #ccc !important; }
+        html.dark .nyt-skin article.article-view header .text-slate-500 { color: #888 !important; }
+        html.dark .nyt-skin article.article-view header { border-bottom-color: #444 !important; }
+        html.dark #lp-article-body figure figcaption,
+        html.dark #lp-article-body .wp-caption-text { color: #9ca3af; }
+        html.dark .nyt-skin #lp-article-body { color: #d8d8d8 !important; }
+        html.dark .nyt-skin #lp-article-body figure figcaption { color: #888; border-top-color: #444; }
+        html.dark .nyt-skin .bg-gradient-to-br { background: #222 !important; border-color: #333 !important; }
+        /* 스티키 바 */
+        html.dark .nyt-skin #lp-sticky-bar { background: rgba(17,17,17,0.98) !important; border-bottom-color: #444 !important; }
+        /* 푸터 */
+        html.dark .nyt-skin footer h2 { color: #e2e8f0; }
 
-        /* — Basic (Minimal) */
-        html.dark body.basic-skin { background: #0f172a; color: #e2e8f0; }
+        /* ════════════════════════════════════════════════════
+           Basic (Minimal) 다크모드
+           ════════════════════════════════════════════════════ */
+        html.dark body.basic-skin    { background: #0f172a; color: #e2e8f0; }
+        html.dark .basic-skin main   { background: #0f172a; }
+        /* 로고 */
+        html.dark .basic-logo        { color: #e2e8f0 !important; }
+        html.dark .basic-logo .basic-logo-badge { color: #94a3b8; }
+        /* 헤더/내비 */
         html.dark .basic-header-accent { background: #0b5ed7; }
         html.dark .basic-header-main { background: #1e293b; box-shadow: none; border-bottom: 1px solid #334155; }
-        html.dark .basic-nav { background: #1e293b !important; border-color: #334155 !important; }
-        html.dark .basic-nav a { color: #e2e8f0 !important; }
+        html.dark .basic-nav         { background: #1e293b !important; border-color: #334155 !important; }
+        html.dark .basic-nav a       { color: #e2e8f0 !important; }
         html.dark .basic-nav a:hover { color: #93c5fd !important; }
-        html.dark .basic-search-btn { border-color: #4a5568; color: #e2e8f0; }
+        html.dark .basic-nav .lp-hamburger { color: #e2e8f0; }
+        html.dark .basic-nav .lp-mobile-nav ul li a       { color: #cbd5e1; }
+        html.dark .basic-nav .lp-mobile-nav ul li a:hover { color: #93c5fd; }
+        /* 검색 */
+        html.dark .basic-search-btn       { border-color: #4a5568; color: #e2e8f0; }
         html.dark .basic-search-btn:hover { border-color: #93c5fd; color: #93c5fd; background: #1e3a5f; }
-        html.dark .basic-skin .lp-dm-btn { border-color: #4a5568; color: #e2e8f0; }
+        html.dark .basic-skin .lp-dm-btn       { border-color: #4a5568; color: #e2e8f0; }
         html.dark .basic-skin .lp-dm-btn:hover { border-color: #93c5fd; color: #93c5fd; background: #1e3a5f; }
-        html.dark .basic-search-drop { background: #1e293b; border-color: #334155; }
+        html.dark .basic-search-drop       { background: #1e293b; border-color: #334155; }
         html.dark .basic-search-drop input { background: #0f172a; border-color: #4a5568; color: #e2e8f0; }
-        html.dark .basic-footer { background: #020617; color: #64748b; }
-        html.dark .basic-footer-grid { border-color: #1e293b; }
-        html.dark .basic-footer-logo { color: #e2e8f0 !important; }
-        html.dark .basic-footer-legal { border-color: #1e293b; color: #64748b; }
-        html.dark .basic-footer-copy { color: #334155; }
+        html.dark .basic-search-drop button[type="submit"]       { background: #0b5ed7; }
+        html.dark .basic-search-drop button[type="submit"]:hover { background: #1d4ed8; }
+        /* 콘텐츠 영역 */
+        html.dark .basic-content-area      { background: #1e293b !important; border-color: #334155 !important; }
+        html.dark .basic-skin .lp-section-heading { color: #e2e8f0; border-left-color: #60a5fa; }
+        html.dark .basic-skin aside .bg-white { background: #1e293b !important; border-color: #334155 !important; }
+        html.dark .basic-skin aside button[type="submit"]       { background: #334155 !important; }
+        html.dark .basic-skin aside button[type="submit"]:hover { background: #60a5fa !important; }
+        html.dark .basic-skin .bg-slate-100 { background: #243044 !important; }
+        /* 스티키 바 */
+        html.dark .basic-skin #lp-sticky-bar { background: rgba(15,23,42,0.97) !important; border-bottom-color: #334155 !important; }
+        html.dark .basic-skin #lp-sticky-bar .lp-sb-title { color: #e2e8f0; }
+        /* 푸터 */
+        html.dark .basic-footer          { background: #020617; color: #64748b; }
+        html.dark .basic-footer-grid     { border-color: #1e293b; }
+        html.dark .basic-footer-logo     { color: #e2e8f0 !important; }
+        html.dark .basic-footer-desc     { color: #4b5563; }
+        html.dark .basic-footer-col h3   { color: #cbd5e1; }
+        html.dark .basic-footer-col ul a       { color: #64748b; }
+        html.dark .basic-footer-col ul a:hover { color: #e2e8f0; }
+        html.dark .basic-footer-legal    { border-color: #1e293b; color: #64748b; }
+        html.dark .basic-footer-legal strong { color: #94a3b8; }
+        html.dark .basic-footer-copy     { color: #334155; }
 
-        /* — Amber Journal */
+        /* ════════════════════════════════════════════════════
+           Amber Journal 다크모드
+           ════════════════════════════════════════════════════ */
         html.dark body.amber-skin {
             --aj-bg: #1c1410; --aj-border: #3d3028; --aj-stone: #231a12; --aj-muted: #7a6e68;
             background: #1c1410; color: #e8ddd3;
         }
-        html.dark .aj-topbar { background: #100c09; color: #6b5e56; border-color: #2a2018; }
-        html.dark .aj-topbar a { color: #6b5e56; }
+        /* 탑바 */
+        html.dark .aj-topbar        { background: #100c09; color: #6b5e56; border-color: #2a2018; }
+        html.dark .aj-topbar a      { color: #6b5e56; }
         html.dark .aj-topbar a:hover { color: #e8ddd3; }
-        html.dark .aj-masthead { background: #1c1410; border-color: #3d3028; }
+        /* 마스트헤드 + 로고 */
+        html.dark .aj-masthead      { background: #1c1410; border-color: #3d3028; }
         html.dark .aj-masthead-banner { background: #2a1f16; border-color: #3d3028; color: #6b5e56; }
-        html.dark .aj-gnav { background: #231a12; border-color: #3d3028; }
-        html.dark .aj-gnav-ul > li > a { color: #d8ccc4; }
+        html.dark .aj-logo-text     { color: #e8ddd3 !important; }
+        html.dark .aj-logo-mark     { filter: brightness(1.3); }
+        /* 내비 */
+        html.dark .aj-gnav          { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-gnav-ul > li > a       { color: #d8ccc4; }
         html.dark .aj-gnav-ul > li > a:hover { color: #fff; }
-        html.dark .aj-featured-section { background: #231a12; border-color: #3d3028; }
-        html.dark .aj-feat-sm { border-color: #3d3028; }
-        html.dark .aj-feat-center { border-color: #3d3028; }
-        html.dark .aj-feat-main-title, html.dark .aj-feat-sm-title { color: #e8ddd3; }
-        html.dark .aj-feat-sm-title:hover, html.dark .aj-feat-main-title:hover { color: var(--aj-amber); }
-        html.dark .aj-widget-block { background: #231a12; border-color: #3d3028; }
-        html.dark .aj-article-list .aj-card { background: #231a12; border-color: #3d3028; }
-        html.dark .aj-card-title a { color: #e8ddd3; }
-        html.dark .aj-card-title a:hover { color: var(--aj-amber); }
-        html.dark .aj-card-meta { color: #7a6e68; }
-        html.dark .aj-widget { background: #231a12; border-color: #3d3028; }
-        html.dark .aj-widget-head { border-color: #3d3028; background: #1c1410; }
-        html.dark .aj-widget-title { color: #e8ddd3; }
-        html.dark .aj-opinion-item { border-color: #3d3028; }
-        html.dark .aj-opinion-title { color: #d8ccc4; }
-        html.dark .aj-opinion-title:hover { color: var(--aj-amber); }
-        html.dark .aj-footer { background: #100c09; border-color: #2a2018; }
-        html.dark .aj-footer-body { border-color: #2a2018; }
-        html.dark .aj-footer-logo-text { color: #e8ddd3; }
-        html.dark .aj-footer-desc { color: #6b5e56; }
-        html.dark .aj-footer-legal { color: #5a5048; }
-        html.dark .aj-footer-legal strong { color: #7a6e68; }
-        html.dark .aj-footer-col-title { color: #e8ddd3; border-color: #3d3028; }
-        html.dark .aj-footer-notice-list a { color: #b0a090; }
-        html.dark .aj-footer-notice-list a:hover { color: var(--aj-amber); }
-        html.dark .aj-footer-notice-date { color: #5a5048; }
-        html.dark .aj-footer-bottom { border-color: #2a2018; }
-        html.dark .aj-footer-copy { color: #3d3028; }
-        html.dark .aj-search-btn { border-color: #3d3028; color: #a09080; }
-        html.dark .amber-skin .lp-dm-btn { border-color: #3d3028; color: #a09080; }
+        html.dark .aj-gnav-sub      { background: #231a12; border-color: #3d3028; }
+        /* 검색 */
+        html.dark .aj-search-btn    { border-color: #3d3028; color: #a09080; }
+        html.dark .amber-skin .lp-dm-btn       { border-color: #3d3028; color: #a09080; }
         html.dark .amber-skin .lp-dm-btn:hover { background: #2a1f16; border-color: var(--aj-amber); color: var(--aj-amber); }
-        html.dark .lp-breaking-bar { background: #231a12 !important; border-color: #3d3028 !important; color: #e8ddd3 !important; }
-        html.dark #lp-sticky-bar { background: rgba(28,20,16,0.97) !important; border-color: #3d3028 !important; }
+        html.dark .aj-search-modal-box   { background: #231a12; }
+        html.dark .aj-search-modal-label { color: #a09080; }
+        html.dark .aj-search-input  { background: #1c1410; border-color: #3d3028; color: #e8ddd3; }
+        html.dark .aj-search-close-btn        { color: #7a6e68; }
+        html.dark .aj-search-close-btn:hover  { color: #e8ddd3; }
+        html.dark .aj-search-hint   { color: #7a6e68; }
+        /* 전면 기사 */
+        html.dark .aj-featured-section { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-feat-sm       { border-color: #3d3028; }
+        html.dark .aj-feat-center   { border-color: #3d3028; }
+        html.dark .aj-feat-sm-title       { color: #e8ddd3; }
+        html.dark .aj-feat-sm-title:hover { color: var(--aj-amber); }
+        html.dark .aj-feat-main-title       { color: #e8ddd3; }
+        html.dark .aj-feat-main-title:hover { color: var(--aj-amber); }
+        html.dark .aj-feat-main-excerpt { color: #b0a090; }
+        /* 카테고리/아카이브 목록 기사 제목 */
+        html.dark .lp-arc-list-title,
+        html.dark .lp-arc-grid-title,
+        html.dark .lp-arc-webzine-title { color: #ffffff; }
+        html.dark .lp-arc-list-item:hover .lp-arc-list-title { color: var(--aj-amber); }
+        html.dark .lp-arc-grid article:hover .lp-arc-grid-title { color: var(--aj-amber); }
+        html.dark .lp-arc-webzine article:hover .lp-arc-webzine-title { color: var(--aj-amber); }
+        /* 홈 위젯 블록 */
+        html.dark .aj-widget-block  { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-widget-block .bg-slate-100 { background: #3d3028 !important; }
+        html.dark .aj-article-list .aj-card { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-card-title a        { color: #e8ddd3; }
+        html.dark .aj-card-title a:hover  { color: var(--aj-amber); }
+        html.dark .aj-card-meta    { color: #7a6e68; }
+        /* 사이드바 위젯 */
+        html.dark .aj-widget       { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-widget-head  { border-color: #3d3028; background: #1c1410; }
+        html.dark .aj-widget-title { color: #e8ddd3; }
+        html.dark .lp-cat-link     { color: #ffffff; }
+        html.dark .lp-cat-link:hover { color: var(--aj-amber); }
+        html.dark .lp-cat-item:hover .lp-cat-bullet { color: var(--aj-amber); }
+        html.dark .aj-opinion-item      { border-color: #3d3028; }
+        html.dark .aj-opinion-link        { color: #d8ccc4; }
+        html.dark .aj-opinion-link:hover  { color: var(--aj-amber); }
+        html.dark .aj-opinion-title       { color: #d8ccc4; }
+        html.dark .aj-opinion-title:hover { color: var(--aj-amber); }
+        /* 썸네일 위젯 */
+        html.dark .aj-thumb-item    { border-color: #3d3028; }
+        html.dark .aj-thumb-img-wrap { background: #3d3028; }
+        html.dark .aj-thumb-img-wrap.aj-thumb-no-img { background: #2a1f16; }
+        html.dark .aj-thumb-link        { color: #d8ccc4; }
+        html.dark .aj-thumb-link:hover  { color: var(--aj-amber); }
+        /* 유틸리티 버튼 */
+        html.dark .aj-util-btn        { background: #231a12; border-color: #3d3028; color: #a09080; }
+        html.dark .aj-util-btn:hover  { border-color: var(--aj-amber); color: var(--aj-amber); background: rgba(217,119,6,0.1); }
+        html.dark .aj-fz-ctrl         { border-color: #3d3028; }
+        html.dark .aj-fz-btn          { background: #231a12; color: #a09080; }
+        html.dark .aj-fz-btn + .aj-fz-btn { border-left-color: #3d3028; }
+        html.dark .aj-fz-btn:hover         { background: rgba(217,119,6,0.1); color: var(--aj-amber); }
+        html.dark .aj-fz-btn.aj-fz-active  { background: rgba(217,119,6,0.15); color: var(--aj-amber); }
+        /* 기사 단일 뷰 */
+        html.dark .aj-single          { background: #1c1410; }
+        html.dark .aj-single-article  { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-single-title    { color: #ffffff; }
+        html.dark .aj-single-meta     { color: #7a6e68; border-top-color: #3d3028; border-bottom-color: #3d3028; }
+        html.dark .aj-single-meta strong { color: #d8ccc4; }
+        html.dark .aj-article-content { color: #d8ccc4; }
+        html.dark .aj-article-content h2,
+        html.dark .aj-article-content h3 { color: #e8ddd3; }
+        html.dark .aj-article-content blockquote { background: rgba(217,119,6,0.1); color: #b0a090; }
+        html.dark .aj-nav-btn         { border-color: #3d3028; }
+        html.dark .aj-nav-btn:hover   { border-color: var(--aj-amber); background: rgba(217,119,6,0.08); }
+        html.dark .aj-nav-title       { color: #d8ccc4; }
+        /* 댓글 */
+        html.dark .aj-comments             { border-top-color: #3d3028; }
+        html.dark .aj-comments-title       { color: #e8ddd3; }
+        html.dark .aj-comment-body         { background: #2a1f16; border-color: #3d3028; }
+        html.dark .aj-comment-name         { color: #e8ddd3; }
+        html.dark .aj-comment-text p       { color: #d8ccc4; }
+        html.dark .aj-comment-form-wrap    { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-comment-form-wrap #respond { background: transparent; border: none; }
+        html.dark .aj-comment-form-wrap #reply-title { color: #e8ddd3; }
+        html.dark .aj-comment-form-wrap .comment-form-comment label,
+        html.dark .aj-comment-form-wrap .comment-form-author label,
+        html.dark .aj-comment-form-wrap .comment-form-email label { color: #a09080; }
+        html.dark .aj-comment-form-wrap input[type="text"],
+        html.dark .aj-comment-form-wrap input[type="email"],
+        html.dark .aj-comment-form-wrap input[type="url"],
+        html.dark .aj-comment-form-wrap textarea { background: #1c1410; border-color: #3d3028; color: #e8ddd3; }
+        html.dark .aj-comments ol.children { border-left-color: #3d3028; }
+        /* 기자 프로필 */
+        html.dark .aj-author-bio      { background: #231a12; border-color: #3d3028; }
+        html.dark .aj-author-bio-name { color: #e8ddd3; }
+        /* 스티키 바 */
+        html.dark .amber-skin #lp-sticky-bar { background: rgba(28,20,16,0.97) !important; border-color: #3d3028 !important; }
+        /* 푸터 */
+        html.dark .aj-footer               { background: #100c09; border-color: #2a2018; }
+        html.dark .aj-footer-body          { border-color: #2a2018; }
+        html.dark .aj-footer-logo-text     { color: #e8ddd3; }
+        html.dark .aj-footer-desc          { color: #6b5e56; }
+        html.dark .aj-footer-legal         { color: #5a5048; }
+        html.dark .aj-footer-legal strong  { color: #7a6e68; }
+        html.dark .aj-footer-col-title     { color: #e8ddd3; border-color: #3d3028; }
+        html.dark .aj-footer-notice-list a       { color: #b0a090; }
+        html.dark .aj-footer-notice-list a:hover { color: var(--aj-amber); }
+        html.dark .aj-footer-notice-date   { color: #5a5048; }
+        html.dark .aj-footer-bottom        { border-color: #2a2018; }
+        html.dark .aj-footer-copy          { color: #3d3028; }
+
+        /* ══════════════════════════════════════════════════════
+           SWN 스킨 — neeon(청라온) 브랜드 리스킨
+           청라온 실사이트 Customizer 값 기준: primary #7400ad,
+           top bar #8100c6, footer #0f1012, ticker accent #81d742
+           ══════════════════════════════════════════════════════ */
+        .swn-skin { --swn-primary: #7400ad; --swn-secondary: #4f0077; --swn-topbar: #8100c6; --swn-accent: #81d742; }
+
+        /* 상단 티커 바 */
+        .swn-skin .lp-topbar { background: var(--swn-topbar); color: #f1e6fa; }
+        .swn-skin .lp-topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; padding: 0.5rem 0; font-size: 0.8125rem; }
+        .swn-skin .lp-ticker-wrap { display: flex; align-items: center; gap: 0.65rem; min-width: 0; flex: 1; }
+        /* 본문 영역 트렌딩 티커 — "주요 뉴스" 섹션 상단 (연보라 배경으로 별도 스타일) */
+        .swn-skin .lp-content-ticker {
+            background: #f6ecfb; border: 1px solid #ecd9f5; border-radius: 9999px;
+            padding: 0.5rem 1rem 0.5rem 0.5rem; margin-bottom: 1.5rem;
+        }
+        .swn-skin .lp-content-ticker .lp-ticker-badge { background: var(--swn-primary); color: #fff; }
+        .swn-skin .lp-content-ticker .lp-ticker-list a { color: var(--swn-secondary); }
+        .swn-skin .lp-content-ticker .lp-ticker-list a:hover { color: var(--swn-primary); text-decoration: underline; }
+        html.dark .swn-skin .lp-content-ticker { background: #2a1a33; border-color: #3d2649; }
+        html.dark .swn-skin .lp-content-ticker .lp-ticker-list a { color: #e9d5f5; }
+        html.dark .swn-skin .lp-content-ticker .lp-ticker-list a:hover { color: #fff; }
+        .swn-skin .lp-ticker-badge {
+            display: inline-flex; align-items: center; gap: 0.3rem; flex-shrink: 0;
+            background: rgba(0,0,0,0.22); color: #fff; font-weight: 800; font-size: 0.6875rem;
+            letter-spacing: 0.06em; padding: 0.22rem 0.65rem; border-radius: 9999px; text-transform: uppercase;
+        }
+        .swn-skin .lp-ticker-badge svg { color: var(--swn-accent); }
+        /* 세로 슬라이딩(위→아래 한 줄씩) 티커 — JS(lpTickerSlide)가 transform을 제어 */
+        .swn-skin .lp-ticker-track { flex: 1; min-width: 0; overflow: hidden; height: 1.375rem; position: relative; }
+        .swn-skin .lp-ticker-list {
+            list-style: none; margin: 0; padding: 0;
+            transition: transform 0.5s cubic-bezier(.4,0,.2,1);
+        }
+        .swn-skin .lp-ticker-list li {
+            height: 1.375rem; line-height: 1.375rem; overflow: hidden;
+            white-space: nowrap; text-overflow: ellipsis;
+        }
+        .swn-skin .lp-ticker-list a { color: #f1e6fa; text-decoration: none; font-weight: 500; }
+        .swn-skin .lp-ticker-list a:hover { color: #fff; }
+        @media (prefers-reduced-motion: reduce) { .swn-skin .lp-ticker-list { transition: none; } }
+        .swn-skin .lp-topbar-right { display: flex; align-items: center; gap: 0.9rem; flex-shrink: 0; }
+        .swn-skin .lp-topbar-date { opacity: 0.85; white-space: nowrap; }
+        .swn-skin .lp-topbar-right nav ul { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0; }
+        .swn-skin .lp-topbar-right nav a { color: #e7d6f2; text-decoration: none; transition: color 0.15s; }
+        .swn-skin .lp-topbar-right nav a:hover { color: #fff; }
+        @media (max-width: 640px) { .swn-skin .lp-topbar-right nav { display: none; } }
+
+        /* 헤더/내비게이션 포인트 컬러 */
+        .swn-skin .lp-dm-btn:hover { background: #f6ecfb; color: var(--swn-primary); }
+        .swn-skin .primary-menu-container ul a:hover { color: var(--swn-primary); }
+        .swn-skin .primary-menu-container ul a::after { background-color: var(--swn-primary); }
+        .swn-skin .lp-desktop-nav ul.sub-menu li a:hover { background: #f6ecfb !important; color: var(--swn-primary) !important; }
+
+        /* 카테고리 배지 (neeon rt_category_color 재사용) */
+        .swn-skin .lp-cat-pill {
+            display: inline-flex; align-items: center; font-size: 0.6875rem; font-weight: 800;
+            letter-spacing: 0.02em; color: #fff; padding: 0.2rem 0.65rem; border-radius: 9999px;
+            text-decoration: none; text-transform: uppercase; line-height: 1.5;
+        }
+        .swn-skin .lp-cat-pill:hover { opacity: 0.88; }
+
+        /* 인기 카테고리 리스트(HOT CATEGORIES) 포인트 컬러 */
+        .swn-skin .lp-cat-link:hover { color: var(--swn-primary); }
+        .swn-skin .lp-cat-link:hover .lp-cat-count { background: #f6ecfb; color: var(--swn-primary); }
+        .swn-skin .lp-cat-item:hover .lp-cat-bullet { color: var(--swn-primary); }
+
+        /* 위클리 추천 — 가로 스크롤 슬라이더 (스크롤바 숨김 + 마우스 드래그 스크롤) */
+        .swn-skin .lp-weekly-track {
+            display: flex; gap: 1.25rem; overflow-x: auto; scroll-snap-type: x mandatory;
+            padding-bottom: 0.5rem; scroll-behavior: smooth;
+            cursor: grab;
+            scrollbar-width: none;    /* Firefox */
+            -ms-overflow-style: none; /* 구형 Edge/IE */
+        }
+        .swn-skin .lp-weekly-track::-webkit-scrollbar { display: none; } /* Chrome · Safari */
+        .swn-skin .lp-weekly-track.lp-dragging {
+            cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto;
+            user-select: none; -webkit-user-select: none;
+        }
+        .swn-skin .lp-weekly-card { flex: 0 0 200px; scroll-snap-align: start; display: block; }
+        .swn-skin .lp-weekly-track.lp-dragging .lp-weekly-card { pointer-events: none; }
+        .swn-skin .lp-slider-nav { display: flex; gap: 0.5rem; flex-shrink: 0; }
+        .swn-skin .lp-slider-btn {
+            width: 2rem; height: 2rem; border-radius: 9999px; border: 1px solid #e2e8f0;
+            background: #fff; display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; line-height: 1; cursor: pointer; color: #475569;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .swn-skin .lp-slider-btn:hover { background: #f6ecfb; border-color: var(--swn-primary); color: var(--swn-primary); }
+        html.dark .swn-skin .lp-slider-btn { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+
+        /* 댓글 · 반응 · 페이지네이션 · 본문 글자크기 컨트롤 포인트 컬러 */
+        .swn-skin .lp-rx-btn.is-reacted            { border-color: var(--swn-primary); }
+        .swn-skin .lp-rx-btn.is-reacted .lp-rx-name { color: var(--swn-primary); }
+        .swn-skin .lp-rx-btn.is-reacted .lp-rx-count{ color: var(--swn-secondary); }
+        .swn-skin .lp-cmt-author a:hover { color: var(--swn-primary); }
+        .swn-skin .lp-cmt-reply a:hover { border-color: var(--swn-primary); color: var(--swn-primary); background: #f6ecfb; }
+        .swn-skin .lp-cmt-text a { color: var(--swn-primary); }
+        .swn-skin .lp-cmts-pager a { color: var(--swn-primary); }
+        .swn-skin .lp-cmt-field input:focus,
+        .swn-skin .lp-cmt-field textarea:focus { border-color: var(--swn-primary); box-shadow: 0 0 0 3px rgba(116,0,173,0.1); }
+        .swn-skin .lp-cmt-submit { background: var(--swn-primary); }
+        .swn-skin .lp-cmt-submit:hover { background: var(--swn-secondary); }
+        .swn-skin .lp-pagination a:hover { background: #f6ecfb; border-color: #d3aee3; color: var(--swn-secondary); }
+        .swn-skin .lp-pagination .current { background: var(--swn-primary); border-color: var(--swn-primary); }
+        .swn-skin .lp-font-ctrl button:hover { background: #f6ecfb; color: var(--swn-secondary); }
+        .swn-skin .lp-font-ctrl button.lp-fz-active { background: #f0e0f7; color: var(--swn-secondary); }
+
+        /* 메인 콘텐츠 — 위젯 섹션 헤딩/링크 포인트 컬러(파랑→보라) */
+        .swn-skin .text-blue-600, .swn-skin .text-blue-700 { color: var(--swn-primary) !important; }
+        .swn-skin a.hover\:text-blue-600:hover,
+        .swn-skin a.hover\:text-blue-500:hover,
+        .swn-skin .group:hover .group-hover\:text-blue-600 { color: var(--swn-primary) !important; }
+        .swn-skin .aj-widget-block .text-blue-700 { color: var(--swn-secondary) !important; }
+
+        /* 카드 호버 살짝 들어올리는 효과 */
+        .swn-skin .lp-content-area article.group,
+        .swn-skin article.group { transition: transform 0.2s ease; }
+
+        /* 다크모드에서도 포인트 컬러 유지 */
+        html.dark .swn-skin .primary-menu-container ul a:hover { color: #c084fc !important; }
+        html.dark .swn-skin .text-blue-600,
+        html.dark .swn-skin .text-blue-700 { color: #c084fc !important; }
+        html.dark .swn-skin a.hover\:text-blue-600:hover,
+        html.dark .swn-skin a.hover\:text-blue-500:hover { color: #c084fc !important; }
+
+        /* 푸터 — neeon footer-style-3 (다크, #0f1012) */
+        .swn-skin footer.bg-slate-900 { background-color: #0f1012 !important; }
+        .swn-skin footer.bg-slate-900 .text-slate-500,
+        .swn-skin footer.bg-slate-900 .text-slate-400 { color: #d0d0d0 !important; }
+        .swn-skin footer.bg-slate-900 .border-slate-800 { border-color: #232326 !important; }
+        .swn-skin footer.bg-slate-900 a.text-blue-400 { color: #cfa3e6 !important; }
+        .swn-skin footer.bg-slate-900 a.text-blue-400:hover,
+        .swn-skin footer.bg-slate-900 .footer-menu-container a:hover { color: #ffffff !important; }
+        .swn-skin footer.bg-slate-900 .lp-footer-social { background: rgba(255,255,255,0.08); color: #d0d0d0; }
+        .swn-skin footer.bg-slate-900 .lp-footer-social:hover { background: var(--swn-primary); color: #fff; }
     </style>
 </head>
 <body <?php body_class( $body_class . ' flex flex-col min-h-screen antialiased' ); ?>>
+    <?php wp_body_open(); // 사이트 아이콘 스플래시 화면 등 훅에서 <body> 시작 직후 출력 ?>
 
     <?php if ( $current_theme_style === 'swn-style' ) : ?>
-        <!-- 상단 탑바 -->
-        <div class="bg-slate-900 text-slate-300 text-xs py-2">
-            <div class="<?php echo $container_class; ?> flex justify-between items-center">
-                <div><?php echo date( 'Y년 m월 d일 l' ); ?></div>
-                <div class="flex space-x-4">
-                    <?php
-                    if ( has_nav_menu( 'top-menu' ) ) {
-                        wp_nav_menu( [ 'theme_location' => 'top-menu', 'container' => false, 'menu_class' => 'flex space-x-4', 'fallback_cb' => false ] );
-                    } else {
-                        echo '<a href="' . admin_url( 'nav-menus.php' ) . '" class="text-blue-400 hover:text-white transition">메뉴를 설정해 주세요. [메뉴 설정하러 가기]</a>';
-                    }
-                    ?>
+        <!-- 상단 유틸리티 바 (날짜 · 메뉴) — TRENDING 티커는 프론트 페이지 "주요 뉴스" 상단으로 이동 -->
+        <div class="lp-topbar">
+            <div class="<?php echo $container_class; ?> lp-topbar-inner">
+                <div class="lp-topbar-date"><?php echo lp_header_date_html(); ?></div>
+                <div class="lp-topbar-right">
+                    <nav>
+                        <?php
+                        if ( has_nav_menu( 'top-menu' ) ) {
+                            wp_nav_menu( [ 'theme_location' => 'top-menu', 'container' => false, 'fallback_cb' => false ] );
+                        } else {
+                            echo '<a href="' . admin_url( 'nav-menus.php' ) . '" class="text-white/80 hover:text-white transition">메뉴를 설정해 주세요. [메뉴 설정하러 가기]</a>';
+                        }
+                        ?>
+                    </nav>
                 </div>
             </div>
         </div>
 
         <!-- 매체 로고 및 배너 -->
-        <header class="py-8 bg-white">
-            <div class="<?php echo $container_class; ?> flex flex-col md:flex-row justify-between items-center gap-6">
+        <header class="py-8 md:pb-4 bg-white">
+            <div class="<?php echo $container_class; ?> flex items-center justify-between gap-4 md:gap-6">
                 <div class="shrink-0">
                     <?php echo lp_get_logo_html( 'swn' ); ?>
                 </div>
@@ -2348,17 +2879,44 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                     상단 메인 배너 영역 (728×90)
                 </div>
                 <?php endif; ?>
-                <div class="lp-swn-dm-wrap">
-                    <button class="lp-dm-btn" id="lpDarkModeBtn" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드">
-                        <svg class="lp-dm-icon lp-dm-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                        <svg class="lp-dm-icon lp-dm-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                <div class="lp-swn-header-right">
+                    <div class="lp-swn-dm-wrap">
+                        <button class="lp-dm-btn" id="lpDarkModeBtn" aria-label="다크/라이트 모드 전환" title="다크/라이트 모드">
+                            <svg class="lp-dm-icon lp-dm-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            <svg class="lp-dm-icon lp-dm-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                        </button>
+                    </div>
+                    <?php echo lp_get_user_menu_html( 18 ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+                    <?php
+                    $lp_langs = function_exists( 'pll_the_languages' ) ? pll_the_languages( [ 'raw' => 1, 'hide_if_empty' => 0 ] ) : [];
+                    if ( ! empty( $lp_langs ) ) :
+                        $lp_cur_lang = function_exists( 'pll_current_language' ) ? pll_current_language() : '';
+                    ?>
+                    <div class="lp-lang-switcher" id="lpLangSwitcher">
+                        <button class="lp-dm-btn lp-lang-btn" id="lpLangBtn" aria-haspopup="true" aria-expanded="false" title="언어 선택 / Language">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            <span class="lp-lang-current"><?php echo esc_html( strtoupper( $lp_cur_lang ) ); ?></span>
+                        </button>
+                        <ul class="lp-lang-menu" id="lpLangMenu">
+                            <?php foreach ( $lp_langs as $lp_lang ) : ?>
+                            <li>
+                                <a href="<?php echo esc_url( $lp_lang['url'] ); ?>"<?php echo $lp_lang['current_lang'] ? ' class="is-current" aria-current="true"' : ''; ?>>
+                                    <?php echo esc_html( strtoupper( $lp_lang['slug'] ) ); ?> · <?php echo esc_html( $lp_lang['name'] ); ?>
+                                </a>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <?php endif; ?>
+                    <button class="lp-hamburger text-slate-800" id="lpSwn-hamburger" aria-label="메뉴 열기" aria-expanded="false" aria-controls="lpSwn-mobile-nav">
+                        <span></span><span></span><span></span>
                     </button>
                 </div>
             </div>
         </header>
 
         <!-- 메인 네비게이션 (GNB) -->
-        <nav class="border-y border-slate-200 bg-white sticky top-0 z-50 shadow-sm" id="lp-gnav">
+        <nav class="lp-gnav-swn border-y border-slate-200 bg-white shadow-sm" id="lp-gnav">
             <div class="<?php echo $container_class; ?> flex items-center gap-2 py-3 md:py-4 text-base md:text-lg font-bold primary-menu-container">
                 <div class="lp-desktop-nav">
                 <?php
@@ -2369,9 +2927,6 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                 }
                 ?>
                 </div>
-                <button class="lp-hamburger ml-auto text-slate-800" id="lpSwn-hamburger" aria-label="메뉴 열기" aria-expanded="false" aria-controls="lpSwn-mobile-nav">
-                    <span></span><span></span><span></span>
-                </button>
             </div>
             <div class="lp-mobile-nav" id="lpSwn-mobile-nav">
                 <?php
@@ -2390,7 +2945,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         <!-- 탑 유틸리티 바 -->
         <div class="nyt-topbar">
             <div class="<?php echo $container_class; ?> flex justify-between items-center py-1.5">
-                <span><?php echo date( 'Y년 n월 j일 D요일' ); ?></span>
+                <span><?php echo lp_header_date_html(); ?></span>
                 <div class="flex items-center gap-4">
                     <?php
                     if ( has_nav_menu( 'top-menu' ) ) {
@@ -2436,6 +2991,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                         <svg class="lp-dm-icon lp-dm-moon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                         <svg class="lp-dm-icon lp-dm-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                     </button>
+                    <?php echo lp_get_user_menu_html( 15 ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
                 </div>
 
             </div>
@@ -2494,7 +3050,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                 <?php echo lp_get_logo_html( 'basic' ); ?>
                 <div class="basic-header-actions">
                     <span style="font-size:0.75rem;color:#6c757d;display:none;" class="md:inline-block">
-                        <?php echo date( 'Y.m.d' ); ?>
+                        <?php echo lp_header_date_html(); ?>
                     </span>
                     <button class="basic-search-btn" id="basicSearchOpen" aria-label="검색">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2505,6 +3061,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                         <svg class="lp-dm-icon lp-dm-moon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                         <svg class="lp-dm-icon lp-dm-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                     </button>
+                    <?php echo lp_get_user_menu_html( 16 ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
                 </div>
             </div>
 
@@ -2560,7 +3117,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
         <!-- ① 상단 유틸리티 바 -->
         <div class="aj-topbar">
             <div class="<?php echo $container_class; ?> aj-topbar-inner">
-                <span class="aj-topbar-date"><?php echo date( 'Y년 n월 j일 l' ); ?></span>
+                <span class="aj-topbar-date"><?php echo lp_header_date_html(); ?></span>
                 <div class="aj-topbar-util">
                     <?php
                     if ( has_nav_menu( 'top-menu' ) ) {
@@ -2596,6 +3153,7 @@ $lp_banner_top = get_theme_mod( 'lp_banner_top', '' );
                         <svg class="lp-dm-icon lp-dm-moon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                         <svg class="lp-dm-icon lp-dm-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                     </button>
+                    <?php echo lp_get_user_menu_html( 14 ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
                 </div>
             </div>
         </div>

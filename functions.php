@@ -3,10 +3,14 @@
  * LaraPress Theme Functions
  */
 
+// 라이선스(PRO 잠금) — nest License Server Manager 연동
+require_once get_template_directory() . '/inc/license.php';
+
 function larapress_theme_setup() {
     // 테마 기본 지원 기능
     add_theme_support('title-tag');
     add_theme_support('post-thumbnails');
+    add_theme_support('html5', ['caption', 'gallery']);
     add_theme_support('custom-logo', [
         'height'      => 120,
         'width'       => 400,
@@ -32,8 +36,84 @@ function larapress_enqueue_scripts() {
     if ( get_theme_mod( 'lp_cat_show_bullet', '1' ) === '1' ) {
         wp_enqueue_style( 'dashicons' );
     }
+
+    // ── 카카오 JavaScript SDK ────────────────────────────────
+    // 커스터마이저에 JavaScript 키가 입력된 경우에만 SDK 를 불러온다.
+    $kakao_key = trim( (string) get_theme_mod( 'lp_kakao_js_key', '' ) );
+    $deps      = [];
+    if ( $kakao_key !== '' ) {
+        wp_enqueue_script(
+            'kakao-js-sdk',
+            'https://t1.kakaocdn.net/kakao_js_sdk/' . LP_KAKAO_SDK_VERSION . '/kakao.min.js',
+            [],
+            LP_KAKAO_SDK_VERSION,
+            true
+        );
+        $deps[] = 'kakao-js-sdk';
+    }
+
+    // 공유 헬퍼(window.lpKakaoShare)는 키가 없어도 등록 — URL 복사 폴백 제공
+    wp_enqueue_script(
+        'lp-kakao-share',
+        get_template_directory_uri() . '/assets/js/kakao-share.js',
+        $deps,
+        '1.1.0',
+        true
+    );
+    wp_localize_script( 'lp-kakao-share', 'lpKakaoData', [
+        'jsKey'        => $kakao_key,
+        'defaultImage' => lp_kakao_default_share_image(),
+        'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+        'postId'       => is_singular( 'post' ) ? get_queried_object_id() : 0,
+    ] );
 }
 add_action('wp_enqueue_scripts', 'larapress_enqueue_scripts');
+
+/** 카카오 JavaScript SDK 버전 (CDN 무결성 해시와 짝을 이룸) */
+define( 'LP_KAKAO_SDK_VERSION', '2.7.5' );
+define( 'LP_KAKAO_SDK_INTEGRITY', 'sha384-dok87au0gKqJdxs7msEdBPNnKSRT+/mhTVzq+qOhcL464zXwvcrpjeWvyj1kCdq6' );
+
+/**
+ * 카카오 SDK CDN 스크립트에 무결성(SRI) 속성 부여.
+ * wp_enqueue_script 는 integrity/crossorigin 을 지원하지 않으므로 태그를 직접 보정한다.
+ */
+function larapress_kakao_sdk_script_tag( $tag, $handle ) {
+    if ( $handle !== 'kakao-js-sdk' ) return $tag;
+    return str_replace(
+        ' src=',
+        ' integrity="' . esc_attr( LP_KAKAO_SDK_INTEGRITY ) . '" crossorigin="anonymous" src=',
+        $tag
+    );
+}
+add_filter( 'script_loader_tag', 'larapress_kakao_sdk_script_tag', 10, 2 );
+
+/**
+ * 카카오 공유 카드의 기본 이미지.
+ * 단건 글이면 특성 이미지, 없으면 커스터마이저 로고 이미지를 사용한다.
+ */
+function lp_kakao_default_share_image() {
+    if ( is_singular() && has_post_thumbnail() ) {
+        $thumb = get_the_post_thumbnail_url( null, 'large' );
+        if ( $thumb ) return lp_encode_url_path( $thumb );
+    }
+    return lp_encode_url_path( (string) get_theme_mod( 'lp_logo_image', '' ) );
+}
+
+/**
+ * URL 경로의 비ASCII 문자(한글 파일명 등)를 퍼센트 인코딩한다.
+ * 인코딩되지 않은 한글 URL은 서버(Cloudflare)가 400을 반환해
+ * 카카오톡·페이스북 등 공유 카드의 대표 이미지가 깨진다.
+ */
+function lp_encode_url_path( $url ) {
+    if ( ! is_string( $url ) || $url === '' ) return $url;
+    return preg_replace_callback(
+        '/[^\x00-\x7F]+/',
+        static function ( $m ) { return rawurlencode( $m[0] ); },
+        $url
+    );
+}
+add_filter( 'wpseo_opengraph_image', 'lp_encode_url_path' );
+add_filter( 'wpseo_twitter_image', 'lp_encode_url_path' );
 
 // ─────────────────────────────────────────────────────────────
 // 일반 WP post 조회수 추적 — lara_post_views 메타 (플러그인과 동일 키)
@@ -46,263 +126,42 @@ add_action('wp', function () {
     global $post;
     if ( ! $post ) return;
 
+    // 새로고침으로 인한 중복 카운트 방지: 같은 방문자는 쿠키 유효기간(30분) 내 재조회 시 제외
+    $cookie_name = 'lara_viewed_' . $post->ID;
+    if ( isset( $_COOKIE[ $cookie_name ] ) ) return;
+
     $views = (int) get_post_meta( $post->ID, 'lara_post_views', true );
     update_post_meta( $post->ID, 'lara_post_views', $views + 1 );
+
+    setcookie( $cookie_name, '1', time() + 30 * MINUTE_IN_SECONDS, '/' );
+} );
+
+// Polylang이 번역본 생성 시 "언어 복사" 기능으로 커스텀 필드를 복사하는데,
+// lara_post_views까지 그대로 복사되면 새로 만든 번역글이 원본의 누적 조회수를
+// 그대로 물려받아 "많이 본 뉴스" 랭킹이 즉시 왜곡된다. 복사 대상에서 제외.
+add_filter( 'pll_copy_post_metas', function ( $keys ) {
+    return array_diff( $keys, [ 'lara_post_views', 'lp_shares' ] );
 } );
 
 /**
- * 홈 화면 위젯 빌더 — 커스터마이저 커스텀 컨트롤
- * 위젯 목록을 JSON으로 저장하고 드래그·추가·삭제 UI를 제공.
+ * 커스터마이저 커스텀 컨트롤 클래스 로드
+ * (커스터마이저와 "테마 설정" 페이지가 같은 컨트롤 정의를 쓴다 — inc/customize-controls.php)
  */
-if ( class_exists( 'WP_Customize_Control' ) ) :
-class LP_Home_Widgets_Control extends WP_Customize_Control {
-
-    public $type = 'lp_home_widgets';
-
-    /** 컨트롤 전용 JS/CSS 인큐 */
-    public function enqueue() {
-        wp_enqueue_script(
-            'lp-customizer-widgets',
-            get_template_directory_uri() . '/assets/js/customizer-widgets.js',
-            [ 'jquery', 'jquery-ui-sortable', 'customize-controls' ],
-            '1.9.0',
-            true
-        );
-        wp_enqueue_style(
-            'lp-customizer-widgets',
-            get_template_directory_uri() . '/assets/css/customizer-widgets.css',
-            [],
-            '1.3.0'
-        );
-
-        // 카테고리 목록을 JS에 전달 (미분류 제외)
-        $raw_cats = get_categories( [
-            'hide_empty' => false,
-            'exclude'    => get_option( 'default_category' ),
-            'orderby'    => 'name',
-            'order'      => 'ASC',
-        ] );
-        $cats = [ [ 'id' => '0', 'name' => '전체 (모든 카테고리)' ] ];
-        foreach ( $raw_cats as $c ) {
-            $cats[] = [ 'id' => (string) $c->term_id, 'name' => esc_js( $c->name ) ];
-        }
-        wp_localize_script( 'lp-customizer-widgets', 'lpWidgetData', [ 'categories' => $cats ] );
+function larapress_load_customize_controls() {
+    if ( class_exists( 'LP_Home_Widgets_Control' ) ) {
+        return;
     }
-
-    /** 컨트롤 HTML 출력 */
-    public function render_content() {
-        ?>
-        <span class="customize-control-title"><?php echo esc_html( $this->label ); ?></span>
-        <div id="lp-layout-builder">
-            <div id="lp-views-wrapper">
-
-                <!-- ── View 1: 메인 목록 ── -->
-                <div id="lp-main-view" class="lp-view">
-                    <div id="lp-main-list"></div>
-                    <button type="button" id="lp-add-item" class="button button-primary">＋ 추가하기</button>
-                    <div id="lp-item-picker">
-                        <button type="button" class="button" data-type="list">📋 목록형 위젯</button>
-                        <button type="button" class="button" data-type="gallery">🖼 갤러리형 위젯</button>
-                        <button type="button" class="button" data-type="section">🗂 섹션 그룹 (가로 배치)</button>
-                    </div>
-                </div>
-
-                <!-- ── View 2: 섹션 상세 ── -->
-                <div id="lp-section-view" class="lp-view">
-                    <div class="lp-view-header">
-                        <button type="button" id="lp-back-btn">
-                            <span class="dashicons dashicons-arrow-left-alt2"></span>
-                            <span id="lp-section-view-title">섹션 그룹</span>
-                        </button>
-                    </div>
-                    <div id="lp-section-detail"></div>
-                </div>
-
-            </div><!-- #lp-views-wrapper -->
-        </div><!-- #lp-layout-builder -->
-        <input type="hidden" id="<?php echo esc_attr( $this->id ); ?>"
-               <?php $this->link(); ?>>
-        <?php
+    if ( ! class_exists( 'WP_Customize_Control' ) ) {
+        require_once ABSPATH . WPINC . '/class-wp-customize-control.php';
     }
+    require_once get_template_directory() . '/inc/customize-controls.php';
 }
-endif; // class_exists WP_Customize_Control (LP_Home_Widgets_Control)
-
-/**
- * 아카이브 레이아웃 선택 — Radio-Image 커스텀 컨트롤
- * SVG 미리보기 + 라벨로 리스트/그리드2/그리드3/웹진형 중 하나를 선택.
- */
-if ( class_exists( 'WP_Customize_Control' ) ) :
-class LP_Archive_Style_Control extends WP_Customize_Control {
-
-    public $type = 'lp_archive_style';
-
-    /** 커스터마이저 패널에만 적용되는 전용 CSS 인큐 */
-    public function enqueue() {
-        wp_add_inline_style( 'customize-controls', '
-            .lp-asp-picker {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 8px;
-                margin-top: 8px;
-            }
-            .lp-asp-label {
-                cursor: pointer;
-                text-align: center;
-                position: relative;
-            }
-            .lp-asp-label input[type="radio"] {
-                position: absolute;
-                opacity: 0;
-                width: 0;
-                height: 0;
-            }
-            .lp-asp-preview {
-                border: 2px solid #ddd;
-                border-radius: 6px;
-                padding: 8px 6px 6px;
-                background: #fafafa;
-                transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
-                display: block;
-            }
-            .lp-asp-preview svg { width: 100%; height: auto; display: block; }
-            .lp-asp-label:hover .lp-asp-preview {
-                border-color: #2271b1;
-                background: #f0f6fc;
-            }
-            .lp-asp-label input:checked ~ .lp-asp-preview {
-                border-color: #2271b1;
-                box-shadow: 0 0 0 2px #bcd1e8;
-                background: #f0f6fc;
-            }
-            .lp-asp-label-text {
-                display: block;
-                font-size: 11px;
-                font-weight: 600;
-                color: #1d2327;
-                margin-top: 5px;
-                line-height: 1.3;
-            }
-            .lp-asp-label-desc {
-                display: block;
-                font-size: 10px;
-                color: #646970;
-                margin-top: 1px;
-            }
-            .lp-asp-label input:checked ~ .lp-asp-preview + .lp-asp-label-text {
-                color: #2271b1;
-            }
-        ' );
-    }
-
-    /** 컨트롤 HTML 출력 */
-    public function render_content() {
-        $choices = [
-            'list'    => [ 'label' => '리스트형',   'desc' => '정통 뉴스 스타일' ],
-            'grid2'   => [ 'label' => '2열 그리드',  'desc' => '매거진 스타일' ],
-            'grid3'   => [ 'label' => '3열 그리드',  'desc' => '매거진 스타일' ],
-            'webzine' => [ 'label' => '웹진형',      'desc' => '큰 썸네일 강조' ],
-        ];
-        ?>
-        <span class="customize-control-title"><?php echo esc_html( $this->label ); ?></span>
-        <?php if ( $this->description ) : ?>
-        <span class="description customize-control-description"><?php echo esc_html( $this->description ); ?></span>
-        <?php endif; ?>
-        <div class="lp-asp-picker">
-            <?php foreach ( $choices as $value => $info ) : ?>
-            <label class="lp-asp-label">
-                <input type="radio"
-                       name="_customize-radio-<?php echo esc_attr( $this->id ); ?>"
-                       value="<?php echo esc_attr( $value ); ?>"
-                       <?php $this->link(); ?>
-                       <?php checked( $this->value(), $value ); ?>>
-                <div class="lp-asp-preview">
-                    <?php echo $this->get_preview_svg( $value ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
-                </div>
-                <span class="lp-asp-label-text"><?php echo esc_html( $info['label'] ); ?></span>
-                <span class="lp-asp-label-desc"><?php echo esc_html( $info['desc'] ); ?></span>
-            </label>
-            <?php endforeach; ?>
-        </div>
-        <?php
-    }
-
-    /** 레이아웃 유형별 SVG 미리보기 생성 */
-    private function get_preview_svg( $type ) {
-        switch ( $type ) {
-            case 'list':
-                return '
-                <svg viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="4" y="6"  width="18" height="14" rx="2" fill="#cbd5e1"/>
-                  <rect x="26" y="7"  width="50" height="3" rx="1" fill="#64748b"/>
-                  <rect x="26" y="12" width="38" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="26" y="16" width="44" height="2" rx="1" fill="#e2e8f0"/>
-                  <line x1="4" y1="25" x2="76" y2="25" stroke="#e2e8f0" stroke-width="1"/>
-                  <rect x="4" y="29" width="18" height="14" rx="2" fill="#cbd5e1"/>
-                  <rect x="26" y="30" width="50" height="3" rx="1" fill="#64748b"/>
-                  <rect x="26" y="35" width="38" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="26" y="39" width="44" height="2" rx="1" fill="#e2e8f0"/>
-                  <line x1="4" y1="48" x2="76" y2="48" stroke="#e2e8f0" stroke-width="1"/>
-                  <rect x="4" y="52" width="18" height="14" rx="2" fill="#cbd5e1"/>
-                  <rect x="26" y="53" width="50" height="3" rx="1" fill="#64748b"/>
-                  <rect x="26" y="58" width="38" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="26" y="62" width="44" height="2" rx="1" fill="#e2e8f0"/>
-                </svg>';
-
-            case 'grid2':
-                return '
-                <svg viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="4"  y="4" width="34" height="22" rx="2" fill="#cbd5e1"/>
-                  <rect x="42" y="4" width="34" height="22" rx="2" fill="#cbd5e1"/>
-                  <rect x="4"  y="29" width="34" height="3" rx="1" fill="#64748b"/>
-                  <rect x="42" y="29" width="34" height="3" rx="1" fill="#64748b"/>
-                  <rect x="4"  y="34" width="26" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="42" y="34" width="26" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="4"  y="38" width="30" height="2" rx="1" fill="#e2e8f0"/>
-                  <rect x="42" y="38" width="30" height="2" rx="1" fill="#e2e8f0"/>
-                  <rect x="4"  y="46" width="34" height="18" rx="2" fill="#e2e8f0"/>
-                  <rect x="42" y="46" width="34" height="18" rx="2" fill="#e2e8f0"/>
-                </svg>';
-
-            case 'grid3':
-                return '
-                <svg viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="2"  y="4" width="22" height="18" rx="2" fill="#cbd5e1"/>
-                  <rect x="29" y="4" width="22" height="18" rx="2" fill="#cbd5e1"/>
-                  <rect x="56" y="4" width="22" height="18" rx="2" fill="#cbd5e1"/>
-                  <rect x="2"  y="24" width="22" height="3" rx="1" fill="#64748b"/>
-                  <rect x="29" y="24" width="22" height="3" rx="1" fill="#64748b"/>
-                  <rect x="56" y="24" width="22" height="3" rx="1" fill="#64748b"/>
-                  <rect x="2"  y="29" width="17" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="29" y="29" width="17" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="56" y="29" width="17" height="2" rx="1" fill="#cbd5e1"/>
-                  <rect x="2"  y="38" width="22" height="16" rx="2" fill="#e2e8f0"/>
-                  <rect x="29" y="38" width="22" height="16" rx="2" fill="#e2e8f0"/>
-                  <rect x="56" y="38" width="22" height="16" rx="2" fill="#e2e8f0"/>
-                  <rect x="2"  y="56" width="22" height="3" rx="1" fill="#94a3b8"/>
-                  <rect x="29" y="56" width="22" height="3" rx="1" fill="#94a3b8"/>
-                  <rect x="56" y="56" width="22" height="3" rx="1" fill="#94a3b8"/>
-                </svg>';
-
-            case 'webzine':
-                return '
-                <svg viewBox="0 0 80 72" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="4" y="4"  width="72" height="36" rx="3" fill="#cbd5e1"/>
-                  <rect x="8" y="7"  width="22" height="5"  rx="2" fill="#3b82f6" opacity="0.9"/>
-                  <rect x="4" y="44" width="65" height="5"  rx="1" fill="#1e293b"/>
-                  <rect x="4" y="52" width="72" height="3"  rx="1" fill="#94a3b8"/>
-                  <rect x="4" y="57" width="55" height="3"  rx="1" fill="#cbd5e1"/>
-                  <rect x="4" y="63" width="36" height="2"  rx="1" fill="#e2e8f0"/>
-                </svg>';
-        }
-        return '';
-    }
-}
-endif; // class_exists WP_Customize_Control (LP_Archive_Style_Control)
 
 /**
  * 테마 사용자 정의하기(Customizer)에 한국형 언론사 설정 폼 추가
  */
 function larapress_customize_register($wp_customize) {
+    larapress_load_customize_controls();
 
     // ── 섹션: 헤더 브랜딩 설정 ────────────────────────────────
     $wp_customize->add_section( 'lp_header_section', [
@@ -369,6 +228,19 @@ function larapress_customize_register($wp_customize) {
         'description' => 'PNG · JPG · WebP 권장. 투명 배경은 PNG 사용.',
         'section'     => 'lp_header_section',
         'priority'    => 10,
+    ] ) );
+
+    // 다크모드 전용 로고 이미지 (선택 — 비워두면 위 로고를 다크모드에서도 그대로 사용)
+    $wp_customize->add_setting( 'lp_logo_image_dark', [
+        'default'           => '',
+        'sanitize_callback' => 'esc_url_raw',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( new WP_Customize_Image_Control( $wp_customize, 'lp_logo_image_dark', [
+        'label'       => '다크모드 전용 로고 이미지 (선택)',
+        'description' => '다크모드에서 표시할 로고. 비워두면 위에서 업로드한 로고를 다크모드에서도 그대로 사용합니다.',
+        'section'     => 'lp_header_section',
+        'priority'    => 11,
     ] ) );
 
     // SVG 로고 코드 입력
@@ -517,11 +389,36 @@ function larapress_customize_register($wp_customize) {
     ] );
     $wp_customize->add_control( 'lp_footer_company_name', [
         'label'       => '푸터 회사명',
-        'description' => '푸터 좌측 상단에 표시되는 언론사 이름',
+        'description' => '푸터 좌측 상단에 표시되는 언론사 이름. 아래 로고를 업로드하지 않은 경우에만 텍스트로 표시됩니다.',
         'section'     => 'larapress_footer_section',
         'type'        => 'text',
         'priority'    => -4,
     ] );
+
+    // 푸터 로고 — 라이트모드 / 다크모드
+    $wp_customize->add_setting( 'lp_footer_logo_light', [
+        'default'           => '',
+        'sanitize_callback' => 'esc_url_raw',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( new WP_Customize_Image_Control( $wp_customize, 'lp_footer_logo_light', [
+        'label'       => '푸터 로고 — 라이트모드',
+        'description' => '라이트모드에서 푸터에 표시할 로고. 비워두면 위 "푸터 회사명" 텍스트가 표시됩니다.',
+        'section'     => 'larapress_footer_section',
+        'priority'    => -3.5,
+    ] ) );
+
+    $wp_customize->add_setting( 'lp_footer_logo_dark', [
+        'default'           => '',
+        'sanitize_callback' => 'esc_url_raw',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( new WP_Customize_Image_Control( $wp_customize, 'lp_footer_logo_dark', [
+        'label'       => '푸터 로고 — 다크모드',
+        'description' => '다크모드에서 표시할 푸터 로고. 비워두면 라이트모드 로고를 다크모드에서도 그대로 사용합니다.',
+        'section'     => 'larapress_footer_section',
+        'priority'    => -3.3,
+    ] ) );
 
     $wp_customize->add_setting( 'lp_footer_company_desc', [
         'default'           => '',
@@ -577,7 +474,7 @@ function larapress_customize_register($wp_customize) {
 
     // 통합 발행·편집인 이름 (체크 시 JS로 표시)
     $wp_customize->add_setting( 'lp_pub_editor_name', [
-        'default'           => '김동주',
+        'default'           => '김아무개',
         'sanitize_callback' => 'sanitize_text_field',
     ] );
     $wp_customize->add_control( 'lp_pub_editor_name', [
@@ -589,7 +486,7 @@ function larapress_customize_register($wp_customize) {
 
     // 개별 발행인
     $wp_customize->add_setting( 'lp_publisher_name', [
-        'default'           => '김동주',
+        'default'           => '김아무개',
         'sanitize_callback' => 'sanitize_text_field',
     ] );
     $wp_customize->add_control( 'lp_publisher_name', [
@@ -601,7 +498,7 @@ function larapress_customize_register($wp_customize) {
 
     // 개별 편집인
     $wp_customize->add_setting( 'lp_editor_name', [
-        'default'           => '김동주',
+        'default'           => '박아무개',
         'sanitize_callback' => 'sanitize_text_field',
     ] );
     $wp_customize->add_control( 'lp_editor_name', [
@@ -613,15 +510,15 @@ function larapress_customize_register($wp_customize) {
 
     // 나머지 푸터 필드
     $footer_fields = [
-        'lp_youth_officer'  => ['label' => '청소년보호책임자',   'default' => '김동주',                   'priority' => 5],
-        'lp_privacy_officer'=> ['label' => '개인정보보호책임자', 'default' => '김동주',                   'priority' => 6],
+        'lp_youth_officer'  => ['label' => '청소년보호책임자',   'default' => '김아무개',                   'priority' => 5],
+        'lp_privacy_officer'=> ['label' => '개인정보보호책임자', 'default' => '김아무개',                   'priority' => 6],
         'lp_reg_num'        => ['label' => '정기간행물등록번호', 'default' => '강원 아00000',             'priority' => 7],
         'lp_reg_date'       => ['label' => '등록일자',           'default' => '2025.06.25',              'priority' => 8],
-        'lp_est_date'       => ['label' => '창간일자',           'default' => '2015.03.27',              'priority' => 9],
-        'lp_address'        => ['label' => '주소',               'default' => '강원특별자치도 강릉시 (예시)', 'priority' => 10],
+        'lp_est_date'       => ['label' => '창간일자',           'default' => '2026.11.25',              'priority' => 9],
+        'lp_address'        => ['label' => '주소',               'default' => '서울특별시 강남구 테헤란로 123', 'priority' => 10],
         'lp_phone'          => ['label' => '대표전화',           'default' => '1588-0000',               'priority' => 11],
         'lp_email'          => ['label' => '이메일',             'default' => 'support@larapress.io',    'priority' => 12],
-        'lp_copyright'      => ['label' => '카피라이트',         'default' => 'Copyright © '.date('Y').' 수완뉴스 & LaraPress. All rights reserved.', 'priority' => 13],
+        'lp_copyright'      => ['label' => '카피라이트',         'default' => 'Copyright © '.date('Y').' '.get_bloginfo('name').'. All rights reserved.', 'priority' => 13], // 사이트 제목(설정 › 일반)을 따른다
     ];
 
     foreach ($footer_fields as $setting_id => $args) {
@@ -812,8 +709,298 @@ function larapress_customize_register($wp_customize) {
         'input_attrs' => [ 'min' => 50, 'max' => 500, 'step' => 10 ],
         'priority'    => 23,
     ] );
+
+    // ── 섹션: 카카오 SDK 설정 ───────────────────────────────
+    $wp_customize->add_section( 'lp_kakao_section', [
+        'title'       => '💬 카카오 SDK 설정',
+        'description' => '카카오 개발자센터(developers.kakao.com)에서 발급한 JavaScript 키를 입력하면 카카오톡 공유 버튼이 활성화됩니다.',
+        'priority'    => 122,
+    ] );
+
+    $wp_customize->add_setting( 'lp_kakao_js_key', [
+        'default'             => '',
+        'sanitize_callback'   => 'lp_sanitize_kakao_key',
+        'validate_callback'   => 'lp_validate_kakao_key',
+        'transport'           => 'refresh',
+    ] );
+    $wp_customize->add_control( 'lp_kakao_js_key', [
+        'label'       => '카카오 JavaScript 키',
+        'description' => '내 애플리케이션 → 앱 키 → JavaScript 키(32자리)를 붙여넣으세요. '
+                       . '카카오 로그인/공유가 동작하려면 [플랫폼 → Web] 에 사이트 도메인('
+                       . esc_html( home_url() ) . ')도 등록해야 합니다. '
+                       . '비워두면 공유 버튼은 URL 복사로 대체 동작합니다.',
+        'section'     => 'lp_kakao_section',
+        'type'        => 'text',
+        'input_attrs' => [ 'placeholder' => '예: 0123456789abcdef0123456789abcdef' ],
+        'priority'    => 1,
+    ] );
 }
 add_action('customize_register', 'larapress_customize_register');
+
+/** 카카오 JavaScript 키 정규화 — 영문·숫자만 허용(공백·따옴표 등 제거) */
+function lp_sanitize_kakao_key( $value ) {
+    return preg_replace( '/[^A-Za-z0-9]/', '', (string) $value );
+}
+
+/** 카카오 JavaScript 키 검증 — 비우거나 32자리 앱 키만 허용 */
+function lp_validate_kakao_key( $validity, $value ) {
+    $value = preg_replace( '/[^A-Za-z0-9]/', '', (string) $value );
+    if ( $value !== '' && strlen( $value ) !== 32 ) {
+        $validity->add( 'lp_kakao_key_length', '카카오 JavaScript 키는 영문·숫자 32자리입니다. 앱 키를 다시 확인해 주세요.' );
+    }
+    return $validity;
+}
+
+/* ============================================================
+ * 워드프레스 알림판 좌측 메뉴 — "테마 설정" 페이지
+ * 레이아웃·파비콘·로고·푸터 등 테마 설정을 알림판에서 바로 입력·저장한다.
+ * 입력 항목은 위 커스터마이저 등록 내용을 그대로 읽어 만든다 (inc/theme-settings-page.php).
+ * ============================================================ */
+require_once get_template_directory() . '/inc/theme-settings-page.php';
+
+/* ============================================================
+ * 사이트 아이콘 스플래시 화면
+ * - "모양 → 사이트 아이덴티티"에 사이트 아이콘(파비콘)이 등록되어
+ *   있을 때만 자동으로 표시된다.
+ * - 배경색은 현재 레이아웃 스킨의 대표(primary) 색상을 사용한다.
+ * - 애니메이션 스타일(가로/세로/대각선 와이프, 모으기·흩어지기)은
+ *   "테마 설정 → 일반·브랜딩 → 스플래시 화면 설정"에서 선택한다.
+ * ============================================================ */
+
+// ── Customizer: 스플래시 화면 설정 섹션 ─────────────────────────
+function larapress_customize_register_splash( $wp_customize ) {
+    $wp_customize->add_section( 'lp_splash_section', [
+        'title'       => '스플래시 화면 설정',
+        'description' => '사이트 아이콘(파비콘)이 등록되어 있을 때, 브라우저 세션당 첫 접속 시 한 번만 잠깐 표시되는 로딩 스플래시 화면입니다. 배경색은 현재 테마 스킨의 대표 색상으로 자동 지정됩니다.',
+        'priority'    => 26,
+    ] );
+
+    $wp_customize->add_setting( 'lp_splash_enable', [
+        'default'           => '1',
+        'sanitize_callback' => 'lp_sanitize_checkbox',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( 'lp_splash_enable', [
+        'label'       => '스플래시 화면 사용',
+        'description' => '사이트 아이콘이 등록된 경우에만 표시됩니다. 아이콘이 없으면 이 옵션을 켜도 표시되지 않습니다.',
+        'section'     => 'lp_splash_section',
+        'type'        => 'checkbox',
+        'priority'    => 1,
+    ] );
+
+    $wp_customize->add_setting( 'lp_splash_animation', [
+        'default'           => 'gather',
+        'sanitize_callback' => 'lp_sanitize_splash_animation',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( 'lp_splash_animation', [
+        'label'       => '스플래시 애니메이션 스타일',
+        'description' => '아이콘과 배경이 나타나고 사라지는 방식을 선택하세요.',
+        'section'     => 'lp_splash_section',
+        'type'        => 'radio',
+        'choices'     => [
+            'horizontal' => '↔ 가로 — 화면이 좌우로 갈라지며 나타났다 사라짐',
+            'vertical'   => '↕ 세로 — 화면이 상하로 갈라지며 나타났다 사라짐',
+            'diagonal'   => '⤡ 대각선 — 화면이 대각선으로 갈라지며 나타났다 사라짐',
+            'gather'     => '✦ 모으기·흩어지기 — 조각이 모여 아이콘을 이루고 다시 흩어짐',
+        ],
+        'priority'    => 2,
+    ] );
+
+    $wp_customize->add_setting( 'lp_splash_duration', [
+        'default'           => '1200',
+        'sanitize_callback' => 'absint',
+        'transport'         => 'refresh',
+    ] );
+    $wp_customize->add_control( 'lp_splash_duration', [
+        'label'       => '표시 유지 시간 (ms)',
+        'description' => '아이콘이 나타난 뒤, 사라지는 애니메이션이 시작되기까지의 대기 시간입니다. (500~4000)',
+        'section'     => 'lp_splash_section',
+        'type'        => 'number',
+        'input_attrs' => [ 'min' => 500, 'max' => 4000, 'step' => 100 ],
+        'priority'    => 3,
+    ] );
+}
+add_action( 'customize_register', 'larapress_customize_register_splash' );
+
+/** 스플래시 애니메이션 값 sanitize — 허용된 4종만 통과 */
+function lp_sanitize_splash_animation( $value ) {
+    $allowed = [ 'horizontal', 'vertical', 'diagonal', 'gather' ];
+    return in_array( $value, $allowed, true ) ? $value : 'gather';
+}
+
+/** 현재 레이아웃 스킨의 대표(primary) 색상을 스플래시 배경색으로 반환 */
+function larapress_get_splash_bg_color() {
+    $colors = [
+        'swn-style'          => '#7400ad', // --swn-primary (청라온 브랜드 보라)
+        'amber-journal'      => '#D97706', // --aj-amber
+        'newyorktimes-style' => '#121212',
+        'basic'              => '#0d6efd',
+    ];
+    $skin = lp_skin_vars()['current_theme_style'];
+    return $colors[ $skin ] ?? '#7400ad';
+}
+
+/** 현재 요청에서 스플래시 화면을 표시해야 하는지 판단 */
+function larapress_splash_should_render() {
+    if ( is_admin() || is_feed() || wp_doing_ajax() ) {
+        return false;
+    }
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+        return false;
+    }
+    if ( ! has_site_icon() ) {
+        return false; // 사이트 아이콘이 없으면 표시하지 않음
+    }
+    if ( get_theme_mod( 'lp_splash_enable', '1' ) !== '1' ) {
+        return false;
+    }
+    return true;
+}
+
+/** <head> — 스플래시 화면 스타일 (FOUC 방지를 위해 body 콘텐츠보다 먼저 출력) */
+function larapress_splash_head_styles() {
+    if ( ! larapress_splash_should_render() ) {
+        return;
+    }
+    ?>
+    <script>
+    // 이번 브라우저 세션에서 이미 스플래시를 본 경우, 첫 페인트 전에 숨긴다.
+    try { if (sessionStorage.getItem('lp-splash-seen')) document.documentElement.classList.add('lp-splash-seen'); } catch (e) {}
+    </script>
+    <style id="lp-splash-style">
+        html.lp-splash-seen #lp-splash { display: none !important; }
+        html.lp-splash-lock,
+        html.lp-splash-lock body { overflow: hidden !important; height: 100%; }
+        .lp-splash {
+            position: fixed; inset: 0; z-index: 999999;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; pointer-events: none;
+        }
+        .lp-splash__panel { position: absolute; inset: 0; background: var(--lp-splash-bg, #1a1a1a); }
+        .lp-splash__stage { position: relative; z-index: 2; width: 120px; height: 120px; }
+        .lp-splash__icon {
+            position: absolute; inset: 0; margin: auto; width: 100px; height: 100px; object-fit: contain;
+            opacity: 0; transform: scale(.55);
+            animation: lpSplashIconIn .5s cubic-bezier(.34,1.56,.64,1) forwards .2s;
+            filter: drop-shadow(0 6px 20px rgba(0,0,0,.3));
+        }
+        @keyframes lpSplashIconIn { to { opacity: 1; transform: scale(1); } }
+        .lp-splash.is-hiding .lp-splash__icon { animation: lpSplashIconOut .35s ease forwards; }
+        @keyframes lpSplashIconOut { to { opacity: 0; transform: scale(.6); } }
+
+        /* ↔ 가로 — 좌우 패널이 갈라지며 사라짐 */
+        .lp-splash--horizontal .lp-splash__panel--a { clip-path: inset(0 50% 0 0); }
+        .lp-splash--horizontal .lp-splash__panel--b { clip-path: inset(0 0 0 50%); }
+        .lp-splash--horizontal.is-hiding .lp-splash__panel--a { transform: translateX(-100%); transition: transform .6s cubic-bezier(.65,0,.35,1); }
+        .lp-splash--horizontal.is-hiding .lp-splash__panel--b { transform: translateX(100%); transition: transform .6s cubic-bezier(.65,0,.35,1); }
+
+        /* ↕ 세로 — 상하 패널이 갈라지며 사라짐 */
+        .lp-splash--vertical .lp-splash__panel--a { clip-path: inset(0 0 50% 0); }
+        .lp-splash--vertical .lp-splash__panel--b { clip-path: inset(50% 0 0 0); }
+        .lp-splash--vertical.is-hiding .lp-splash__panel--a { transform: translateY(-100%); transition: transform .6s cubic-bezier(.65,0,.35,1); }
+        .lp-splash--vertical.is-hiding .lp-splash__panel--b { transform: translateY(100%); transition: transform .6s cubic-bezier(.65,0,.35,1); }
+
+        /* ⤡ 대각선 — 대각선으로 나뉜 패널이 반대 모서리로 사라짐 */
+        .lp-splash--diagonal .lp-splash__panel--a { clip-path: polygon(0 0, 100% 0, 0 100%); }
+        .lp-splash--diagonal .lp-splash__panel--b { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+        .lp-splash--diagonal.is-hiding .lp-splash__panel--a { transform: translate(-100%,-100%); transition: transform .65s cubic-bezier(.65,0,.35,1); }
+        .lp-splash--diagonal.is-hiding .lp-splash__panel--b { transform: translate(100%,100%); transition: transform .65s cubic-bezier(.65,0,.35,1); }
+
+        /* ✦ 모으기·흩어지기 — 조각(dot)이 모여 아이콘을 이루고 다시 흩어짐 */
+        .lp-splash--gather .lp-splash__panel--b { display: none; }
+        .lp-splash--gather.is-hiding .lp-splash__panel--a { opacity: 0; transition: opacity .6s ease .2s; }
+        .lp-splash__dot {
+            position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 50%;
+            background: #fff; opacity: 1; transform: translate(-50%,-50%);
+            animation: lpDotGather .5s cubic-bezier(.34,1.56,.64,1) forwards;
+            display: none;
+        }
+        .lp-splash--gather .lp-splash__dot { display: block; }
+        @keyframes lpDotGather {
+            0%   { opacity: .9; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
+            100% { opacity: 0;  transform: translate(-50%, -50%) scale(.3); }
+        }
+        .lp-splash.is-hiding .lp-splash__dot { animation: lpDotScatter .5s cubic-bezier(.34,1.56,.64,1) forwards; }
+        @keyframes lpDotScatter {
+            0%   { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+            100% { opacity: .9; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .lp-splash__icon, .lp-splash__dot, .lp-splash__panel { animation: none !important; transition: none !important; }
+            .lp-splash { transition: opacity .3s ease !important; }
+            .lp-splash.is-hiding { opacity: 0; }
+        }
+    </style>
+    <?php
+}
+add_action( 'wp_head', 'larapress_splash_head_styles', 1 );
+
+/** <body> 시작 직후 — 스플래시 마크업 + 표시/제거 스크립트 출력 */
+function larapress_splash_markup() {
+    if ( ! larapress_splash_should_render() ) {
+        return;
+    }
+
+    $animation = get_theme_mod( 'lp_splash_animation', 'gather' );
+    $animation = lp_sanitize_splash_animation( $animation );
+
+    $duration = (int) get_theme_mod( 'lp_splash_duration', 1200 );
+    $duration = max( 500, min( 4000, $duration ) );
+
+    $bg_color = larapress_get_splash_bg_color();
+    // 배경이 투명한 스플래시 전용 로고가 있으면 우선 사용 (사이트 아이콘은 흰 배경이 포함된 RGB 이미지)
+    $icon_url = file_exists( get_template_directory() . '/assets/images/splash-logo.png' )
+        ? get_template_directory_uri() . '/assets/images/splash-logo.png'
+        : get_site_icon_url( 192 );
+    if ( ! $icon_url ) {
+        return;
+    }
+    ?>
+    <div id="lp-splash" class="lp-splash lp-splash--<?php echo esc_attr( $animation ); ?>" style="--lp-splash-bg: <?php echo esc_attr( $bg_color ); ?>;" role="presentation" aria-hidden="true">
+        <div class="lp-splash__panel lp-splash__panel--a"></div>
+        <div class="lp-splash__panel lp-splash__panel--b"></div>
+        <div class="lp-splash__stage">
+            <?php for ( $i = 0; $i < 8; $i++ ) :
+                $angle = $i * 45;
+                $tx    = round( cos( deg2rad( $angle ) ) * 70 );
+                $ty    = round( sin( deg2rad( $angle ) ) * 70 );
+            ?>
+                <span class="lp-splash__dot" style="--tx: <?php echo esc_attr( $tx ); ?>px; --ty: <?php echo esc_attr( $ty ); ?>px;"></span>
+            <?php endfor; ?>
+            <img class="lp-splash__icon" src="<?php echo esc_url( $icon_url ); ?>" width="100" height="100" alt="" />
+        </div>
+    </div>
+    <noscript><style>#lp-splash{display:none!important;} html.lp-splash-lock{overflow:auto!important;}</style></noscript>
+    <script>
+    (function(){
+        var el = document.getElementById('lp-splash');
+        if (!el) return;
+        if (document.documentElement.classList.contains('lp-splash-seen')) {
+            el.parentNode.removeChild(el);
+            return;
+        }
+        try { sessionStorage.setItem('lp-splash-seen', '1'); } catch (e) {}
+        document.documentElement.classList.add('lp-splash-lock');
+        var DURATION = <?php echo (int) $duration; ?>;
+        var done = false;
+        function hide(){
+            if (done) return;
+            done = true;
+            el.classList.add('is-hiding');
+            document.documentElement.classList.remove('lp-splash-lock');
+            setTimeout(function(){
+                if (el && el.parentNode) { el.parentNode.removeChild(el); }
+            }, 750);
+        }
+        // 페이지 로드 완료를 기다리지 않고, 표시 시점부터 DURATION 뒤에 사라진다.
+        setTimeout(hide, DURATION);
+    })();
+    </script>
+    <?php
+}
+add_action( 'wp_body_open', 'larapress_splash_markup' );
 
 /**
  * SNS 소셜 링크 HTML 생성 헬퍼
@@ -880,49 +1067,114 @@ function lp_social_links_html( $link_class = '', $icon_size = 20 ) {
 }
 
 /**
- * 엠버 저널 — 많이 본 기사 위젯 HTML 반환
- * 해커뉴스 랭킹 공식: score = (views - 1) / (hours + 2)^1.8
- * 10분 Transient 캐시 사용
+ * 카테고리별 배지 색상을 반환합니다.
+ * neeon 테마가 사용하던 'rt_category_color' 텀 메타(있으면)를 그대로 재사용하고,
+ * 값이 없으면 SWN 스킨 기본 브랜드 컬러(보라)로 대체합니다.
  *
- * @param string $link_class  순위 번호 강조 클래스
+ * @param int    $term_id
+ * @param string $fallback
+ * @return string 6자리 hex (# 없이 또는 포함 모두 허용, 항상 # 포함해 반환)
+ */
+function lp_get_category_color( $term_id, $fallback = '#7400ad' ) {
+    $term_id = (int) $term_id;
+    if ( $term_id <= 0 ) return $fallback;
+
+    static $cache = [];
+    if ( isset( $cache[ $term_id ] ) ) return $cache[ $term_id ];
+
+    $color = get_term_meta( $term_id, 'rt_category_color', true );
+    $color = trim( (string) $color );
+    if ( $color && $color[0] !== '#' ) {
+        $color = '#' . $color;
+    }
+    if ( ! preg_match( '/^#[0-9a-fA-F]{6}$/', $color ) ) {
+        $color = $fallback;
+    }
+
+    $cache[ $term_id ] = $color;
+    return $color;
+}
+
+/** 많이 본 뉴스 가중치 — 조회수 · 기사 반응 · 공유 (합계 1) */
+define( 'LP_HOT_WEIGHT_VIEWS',     0.4 );
+define( 'LP_HOT_WEIGHT_REACTIONS', 0.5 );
+define( 'LP_HOT_WEIGHT_SHARES',    0.1 );
+
+/**
+ * 많이 본 뉴스 목록 (상위 5개) — 모든 스킨의 "많이 본 뉴스/기사" 위젯 공용
+ *
+ *  engagement = 0.4 × 조회수/최대조회수 + 0.5 × 반응수/최대반응수 + 0.1 × 공유수/최대공유수
+ *  score      = engagement / (t + 2)^g
+ *    각 지표는 후보군(최근 90일) 내 최댓값으로 나눠 0~1로 정규화 — 단위가 다른 지표를 비율대로 합산
+ *    t : 발행 후 경과 시간(시간 단위), g : gravity 1.8 (해커뉴스 랭킹 공식의 시간 감쇠)
+ *  결과는 10분 Transient 캐시에 저장해 DB 부하를 최소화.
+ *
+ * @return array[] [ 'title', 'url', 'views' ] 목록
+ */
+function lp_hot_news_list() {
+    $cache_key = 'lp_hot_news_v3';
+    $list      = get_transient( $cache_key );
+    if ( $list !== false ) {
+        return $list;
+    }
+
+    $gravity = 1.8;
+    $now     = time();
+    $pool    = new WP_Query( [
+        'post_type'              => 'post', /* 라라프레스 게시판(lara_post) 제외, WP 기사만 */
+        'post_status'            => 'publish',
+        'posts_per_page'         => 200,
+        'date_query'             => [ [ 'after' => '90 days ago' ] ],
+        'no_found_rows'          => true,   // COUNT(*) 생략으로 속도 향상
+        'update_post_meta_cache' => true,   // 메타 일괄 로드 (쿼리 1회)
+        'update_post_term_cache' => false,
+    ] );
+
+    $metrics = [];
+    $max     = [ 'views' => 0, 'reactions' => 0, 'shares' => 0 ];
+    foreach ( $pool->posts as $p ) {
+        $rx = get_post_meta( $p->ID, 'lp_reactions', true );
+        $m  = [
+            'views'     => (int) get_post_meta( $p->ID, 'lara_post_views', true ),
+            'reactions' => is_array( $rx ) ? (int) array_sum( $rx ) : 0,
+            'shares'    => (int) get_post_meta( $p->ID, 'lp_shares', true ),
+            'hours'     => max( 0, ( $now - strtotime( $p->post_date_gmt ) ) / 3600 ),
+        ];
+        foreach ( $max as $k => $v ) {
+            $max[ $k ] = max( $v, $m[ $k ] );
+        }
+        $metrics[ $p->ID ] = $m;
+    }
+    wp_reset_postdata();
+
+    $scored = [];
+    foreach ( $metrics as $id => $m ) {
+        $engagement = ( $max['views']     ? LP_HOT_WEIGHT_VIEWS     * $m['views']     / $max['views']     : 0 )
+                    + ( $max['reactions'] ? LP_HOT_WEIGHT_REACTIONS * $m['reactions'] / $max['reactions'] : 0 )
+                    + ( $max['shares']    ? LP_HOT_WEIGHT_SHARES    * $m['shares']    / $max['shares']    : 0 );
+        $scored[ $id ] = $engagement / pow( $m['hours'] + 2, $gravity );
+    }
+    arsort( $scored );
+
+    $list = [];
+    foreach ( array_slice( array_keys( $scored ), 0, 5 ) as $id ) {
+        $list[] = [
+            'title' => get_the_title( $id ),
+            'url'   => get_permalink( $id ),
+            'views' => number_format( $metrics[ $id ]['views'] ),
+        ];
+    }
+    set_transient( $cache_key, $list, 10 * MINUTE_IN_SECONDS );
+    return $list;
+}
+
+/**
+ * 엠버 저널 — 많이 본 기사 위젯 HTML 반환 (랭킹은 lp_hot_news_list())
+ *
  * @return string
  */
 function lp_aj_hot_news_html() {
-    $cache_key = 'lp_aj_hot_v1';
-    $list      = get_transient( $cache_key );
-
-    if ( $list === false ) {
-        $gravity = 1.8;
-        $now     = time();
-        $pool    = new WP_Query( [
-            'post_type'              => 'post',
-            'post_status'            => 'publish',
-            'posts_per_page'         => 200,
-            'date_query'             => [ [ 'after' => '90 days ago' ] ],
-            'no_found_rows'          => true,
-            'update_post_meta_cache' => true,
-            'update_post_term_cache' => false,
-        ] );
-
-        $scored = [];
-        foreach ( $pool->posts as $p ) {
-            $views          = max( 1, (int) get_post_meta( $p->ID, 'lara_post_views', true ) );
-            $hours          = max( 0, ( $now - strtotime( $p->post_date_gmt ) ) / 3600 );
-            $scored[ $p->ID ] = ( $views - 1 ) / pow( $hours + 2, $gravity );
-        }
-        wp_reset_postdata();
-        arsort( $scored );
-
-        $list = [];
-        foreach ( array_slice( array_keys( $scored ), 0, 5, true ) as $id ) {
-            $list[] = [
-                'title' => get_the_title( $id ),
-                'url'   => get_permalink( $id ),
-                'views' => number_format( (int) get_post_meta( $id, 'lara_post_views', true ) ),
-            ];
-        }
-        set_transient( $cache_key, $list, 10 * MINUTE_IN_SECONDS );
-    }
+    $list = lp_hot_news_list();
 
     if ( ! $list ) {
         return '<p style="padding:0.75rem 1rem;font-size:0.8rem;color:#9ca3af;">아직 조회 데이터가 없습니다.</p>';
@@ -939,6 +1191,399 @@ function lp_aj_hot_news_html() {
         $html .= '</div></li>';
     }
     $html .= '</ol>';
+    return $html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 인기 검색어 — option 'lp_search_log' : [ 'Y-m-d' => [ '키워드' => 횟수 ] ]
+// 페이지 캐시(WP Super Cache)로 검색 결과 페이지가 PHP를 거치지 않을 수 있어
+// 결과가 있는 검색 페이지에서 admin-ajax.php로 집계 요청을 보낸다.
+// 같은 브라우저의 같은 키워드는 하루 1회만 집계, 최근 7일 합산으로 순위 산정.
+// ─────────────────────────────────────────────────────────────
+define( 'LP_SEARCH_LOG_DAYS', 7 );
+define( 'LP_SEARCH_LOG_MAX_PER_DAY', 300 ); // 하루 저장 키워드 상한 (스팸성 키워드 폭주 방지)
+
+/** 검색어 정규화 — 공백 정리 · 소문자화 · 길이 제한. 부적합하면 '' */
+function lp_normalize_search_keyword( $kw ) {
+    $kw = trim( preg_replace( '/\s+/u', ' ', wp_strip_all_tags( (string) $kw ) ) );
+    $kw = mb_strtolower( $kw, 'UTF-8' );
+    // $len = mb_strlen( $kw, 'UTF-8' );
+    // if ( $len < 2 || $len > 30 ) return '';
+    // if ( preg_match( '#https?://|www\.|[<>{}\[\]]#i', $kw ) ) return '';
+    return $kw;
+}
+
+function larapress_track_search() {
+    $kw = lp_normalize_search_keyword( wp_unslash( $_POST['keyword'] ?? '' ) );
+    if ( $kw === '' ) {
+        wp_send_json_error( [ 'message' => 'invalid' ] );
+    }
+
+    $cookie_name = 'lp_kw_' . md5( $kw );
+    if ( isset( $_COOKIE[ $cookie_name ] ) ) {
+        wp_send_json_success( [ 'counted' => false ] );
+    }
+
+    // 실제로 결과가 있는 검색어만 집계 (임의 문자열 주입 방지)
+    $hit = new WP_Query( [
+        's'                      => $kw,
+        'post_type'              => 'post',
+        'post_status'            => 'publish',
+        'posts_per_page'         => 1,
+        'fields'                 => 'ids',
+        'no_found_rows'          => true,
+        'update_post_meta_cache' => false,
+        'update_post_term_cache' => false,
+    ] );
+    if ( ! $hit->posts ) {
+        wp_send_json_success( [ 'counted' => false ] );
+    }
+
+    setcookie( $cookie_name, '1', time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN );
+
+    $log   = get_option( 'lp_search_log', [] );
+    $log   = is_array( $log ) ? $log : [];
+    $today = current_time( 'Y-m-d' );
+    $day   = $log[ $today ] ?? [];
+
+    if ( isset( $day[ $kw ] ) || count( $day ) < LP_SEARCH_LOG_MAX_PER_DAY ) {
+        $day[ $kw ]    = (int) ( $day[ $kw ] ?? 0 ) + 1;
+        $log[ $today ] = $day;
+    }
+
+    // 보관 기간이 지난 날짜 정리
+    $cutoff = wp_date( 'Y-m-d', time() - ( LP_SEARCH_LOG_DAYS - 1 ) * DAY_IN_SECONDS );
+    foreach ( array_keys( $log ) as $d ) {
+        if ( $d < $cutoff ) unset( $log[ $d ] );
+    }
+    update_option( 'lp_search_log', $log, false );
+
+    wp_send_json_success( [ 'counted' => true ] );
+}
+add_action( 'wp_ajax_lp_track_search', 'larapress_track_search' );
+add_action( 'wp_ajax_nopriv_lp_track_search', 'larapress_track_search' );
+
+/** 결과가 있는 검색 페이지 첫 페이지에서 집계 요청 전송 (편집자 이상 제외) */
+add_action( 'wp_footer', function () {
+    if ( ! is_search() || is_paged() || ! have_posts() ) return;
+    if ( current_user_can( 'edit_posts' ) ) return;
+    $kw = lp_normalize_search_keyword( get_search_query( false ) );
+    if ( $kw === '' ) return;
+    ?>
+<script>
+(function () {
+    var body = new FormData();
+    body.append('action', 'lp_track_search');
+    body.append('keyword', <?php echo wp_json_encode( $kw ); ?>);
+    fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>, { method: 'POST', body: body, credentials: 'same-origin' }).catch(function () {});
+})();
+</script>
+    <?php
+} );
+
+/**
+ * 인기 검색어 목록 (상위 10개) — 최근 7일 집계, 10분 Transient 캐시
+ *
+ * @return array[] [ 'keyword', 'url', 'count' ] 목록
+ */
+function lp_popular_keywords_list() {
+    $cache_key = 'lp_popular_keywords_v1';
+    $list      = get_transient( $cache_key );
+    if ( $list !== false ) {
+        return $list;
+    }
+
+    $log    = get_option( 'lp_search_log', [] );
+    $cutoff = wp_date( 'Y-m-d', time() - ( LP_SEARCH_LOG_DAYS - 1 ) * DAY_IN_SECONDS );
+    $totals = [];
+    foreach ( (array) $log as $d => $day ) {
+        if ( $d < $cutoff || ! is_array( $day ) ) continue;
+        foreach ( $day as $kw => $cnt ) {
+            $totals[ $kw ] = ( $totals[ $kw ] ?? 0 ) + (int) $cnt;
+        }
+    }
+    arsort( $totals );
+
+    $list = [];
+    foreach ( array_slice( $totals, 0, 10, true ) as $kw => $cnt ) {
+        $kw     = (string) $kw; // 숫자 키워드는 정수 키로 저장됨
+        $list[] = [
+            'keyword' => $kw,
+            'url'     => home_url( '/?s=' . rawurlencode( $kw ) ),
+            'count'   => (int) $cnt,
+        ];
+    }
+    set_transient( $cache_key, $list, 10 * MINUTE_IN_SECONDS );
+    return $list;
+}
+
+/**
+ * 인기 검색어 위젯 HTML (기본/SWN/NYT 스킨 — Tailwind 카드)
+ *
+ * @param string $extra_class 카드에 추가할 클래스 (예: 'mb-6')
+ * @return string
+ */
+function lp_popular_keywords_widget_html( $extra_class = '' ) {
+    $list = lp_popular_keywords_list();
+
+    $html  = '<div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm ' . esc_attr( $extra_class ) . '">';
+    $html .= '<h3 class="font-bold text-slate-800 border-b border-slate-900 pb-2 mb-4 flex items-center gap-2">인기 검색어';
+    $html .= '<span class="ml-auto text-[10px] font-normal text-slate-400 tracking-wide">최근 7일</span></h3>';
+
+    if ( ! $list ) {
+        $html .= '<p class="text-sm text-slate-400 text-center py-4">아직 데이터가 없습니다.</p></div>';
+        return $html;
+    }
+
+    $html .= '<ol class="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">';
+    foreach ( $list as $i => $item ) {
+        $num_class = $i === 0 ? 'text-blue-600' : ( $i < 3 ? 'text-slate-500' : 'text-slate-400' );
+        $html .= '<li class="flex items-center gap-2 min-w-0">';
+        $html .= '<span class="font-black w-4 flex-shrink-0 text-right ' . $num_class . '">' . ( $i + 1 ) . '</span>';
+        $html .= '<a href="' . esc_url( $item['url'] ) . '" class="text-slate-700 hover:text-blue-600 hover:underline truncate transition">' . esc_html( $item['keyword'] ) . '</a>';
+        $html .= '</li>';
+    }
+    $html .= '</ol></div>';
+    return $html;
+}
+
+/**
+ * 엠버 저널 — 인기 검색어 위젯 본문 HTML
+ *
+ * @return string
+ */
+function lp_aj_popular_keywords_html() {
+    $list = lp_popular_keywords_list();
+
+    if ( ! $list ) {
+        return '<p style="padding:0.75rem 1rem;font-size:0.8rem;color:#9ca3af;">아직 검색 데이터가 없습니다.</p>';
+    }
+
+    $html = '<ol class="aj-opinion-list">';
+    foreach ( $list as $i => $item ) {
+        $num_color = $i === 0 ? 'color:var(--aj-amber)' : ( $i === 1 ? 'color:#9ca3af' : 'color:#d1d5db' );
+        $html .= '<li class="aj-opinion-item">';
+        $html .= '<span class="aj-opinion-num" style="' . $num_color . '">' . ( $i + 1 ) . '</span>';
+        $html .= '<div class="aj-opinion-text">';
+        $html .= '<a href="' . esc_url( $item['url'] ) . '" class="aj-opinion-link">' . esc_html( $item['keyword'] ) . '</a>';
+        $html .= '</div></li>';
+    }
+    $html .= '</ol>';
+    return $html;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 기자 순위 — 월(지난달 1일~말일) · 주(지난주 월~일) · 일(어제) 기간별
+//  기간 내 발행한 기사를 기자별로 묶어 아래 지표를 합산 → 기자 간 최댓값으로 0~1 정규화 → 가중 합
+//  공동 저자 기사는 각 저자에게 모두 반영.
+// ─────────────────────────────────────────────────────────────
+define( 'LP_RANK_WEIGHTS', [
+    'posts'     => 0.4, // 작성 기사 수
+    'views'     => 0.3, // 조회수
+    'reactions' => 0.1, // 기사 반응
+    'comments'  => 0.1, // 댓글
+    'shares'    => 0.1, // 공유
+] );
+
+/**
+ * 기자 순위 기간 정의 — 키 => [ 버튼 라벨, 시작 timestamp, 끝 timestamp(미포함), 집계기준 문구 ]
+ * 모두 사이트 시간대 기준으로 직전에 끝난 기간
+ *   월 : 지난달 1일 00:00 ~ 이번 달 1일 00:00
+ *   주 : 지난주 월요일 00:00 ~ 이번 주 월요일 00:00
+ *   일 : 어제 00:00 ~ 오늘 00:00
+ */
+function lp_reporter_rank_periods() {
+    $tz         = wp_timezone();
+    $this_month = new DateTimeImmutable( 'first day of this month midnight', $tz );
+    $last_month = $this_month->modify( '-1 month' );
+    $this_week  = new DateTimeImmutable( 'monday this week midnight', $tz );
+    $last_week  = $this_week->modify( '-1 week' );
+    $today      = new DateTimeImmutable( 'today', $tz );
+    $yesterday  = $today->modify( '-1 day' );
+    return [
+        'month' => [ '월', $last_month->getTimestamp(), $this_month->getTimestamp(),
+                     $last_month->format( 'Y.m.d' ) . ' ~ ' . $this_month->modify( '-1 day' )->format( 'Y.m.d' ) . ' (지난달)' ],
+        'week'  => [ '주', $last_week->getTimestamp(), $this_week->getTimestamp(),
+                     $last_week->format( 'Y.m.d' ) . ' ~ ' . $this_week->modify( '-1 day' )->format( 'Y.m.d' ) . ' (지난주)' ],
+        'day'   => [ '일', $yesterday->getTimestamp(), $today->getTimestamp(),
+                     $yesterday->format( 'Y.m.d' ) . ' (어제)' ],
+    ];
+}
+
+/**
+ * 기자 순위 (기간별 상위 5명) — 30분 Transient 캐시
+ *
+ * @return array [ 'month' => [...], 'week' => [...], 'day' => [...] ]
+ *               각 항목: [ 'name', 'url', 'avatar_html', 'posts', 'views' ]
+ */
+function lp_reporter_rank_list() {
+    $lang      = function_exists( 'pll_current_language' ) ? (string) pll_current_language() : '';
+    $cache_key = 'lp_reporter_rank_v4_' . $lang . '_' . wp_date( 'Ymd' ); // 날짜가 바뀌면 즉시 새로 집계
+    $ranks     = get_transient( $cache_key );
+    if ( $ranks !== false ) {
+        return $ranks;
+    }
+
+    $periods = lp_reporter_rank_periods();
+    $since   = min( array_column( $periods, 1 ) );
+    $pool    = new WP_Query( [
+        'post_type'              => 'post', /* 라라프레스 게시판(lara_post) 제외, WP 기사만 */
+        'post_status'            => 'publish',
+        'posts_per_page'         => 2000,
+        'date_query'             => [ [ 'column' => 'post_date_gmt', 'after' => gmdate( 'Y-m-d H:i:s', $since ), 'inclusive' => true ] ],
+        'no_found_rows'          => true,
+        'update_post_meta_cache' => true,
+        'update_post_term_cache' => false,
+    ] );
+
+    $profiles = []; // 기자 키 => [ name, url, avatar_html ]
+    $stats    = array_fill_keys( array_keys( $periods ), [] );
+    foreach ( $pool->posts as $p ) {
+        $ts  = strtotime( $p->post_date_gmt . ' UTC' );
+        $rx  = get_post_meta( $p->ID, 'lp_reactions', true );
+        $m   = [
+            'posts'     => 1,
+            'views'     => (int) get_post_meta( $p->ID, 'lara_post_views', true ),
+            'reactions' => is_array( $rx ) ? (int) array_sum( $rx ) : 0,
+            'comments'  => (int) $p->comment_count,
+            'shares'    => (int) get_post_meta( $p->ID, 'lp_shares', true ),
+        ];
+        foreach ( lp_get_post_authors( $p->ID, 64, 'lp-rk-avatar' ) as $a ) {
+            $key = md5( $a['id'] . '|' . $a['name'] );
+            if ( ! isset( $profiles[ $key ] ) ) {
+                $profiles[ $key ] = [ 'name' => $a['name'], 'url' => $a['url'], 'avatar_html' => $a['avatar_html'] ];
+            }
+            foreach ( $periods as $pk => $pd ) {
+                if ( $ts < $pd[1] || $ts >= $pd[2] ) continue;
+                foreach ( $m as $k => $v ) {
+                    $stats[ $pk ][ $key ][ $k ] = ( $stats[ $pk ][ $key ][ $k ] ?? 0 ) + $v;
+                }
+            }
+        }
+    }
+    wp_reset_postdata();
+
+    $ranks = [];
+    foreach ( $stats as $pk => $rows ) {
+        $max = array_fill_keys( array_keys( LP_RANK_WEIGHTS ), 0 );
+        foreach ( $rows as $row ) {
+            foreach ( $max as $k => $v ) $max[ $k ] = max( $v, $row[ $k ] );
+        }
+        $scored = [];
+        foreach ( $rows as $key => $row ) {
+            $s = 0;
+            foreach ( LP_RANK_WEIGHTS as $k => $w ) {
+                $s += $max[ $k ] ? $w * $row[ $k ] / $max[ $k ] : 0;
+            }
+            $scored[ $key ] = $s;
+        }
+        arsort( $scored );
+
+        $ranks[ $pk ] = [];
+        foreach ( array_slice( array_keys( $scored ), 0, 5 ) as $key ) {
+            $ranks[ $pk ][] = $profiles[ $key ] + [
+                'posts' => number_format( $rows[ $key ]['posts'] ),
+                'views' => number_format( $rows[ $key ]['views'] ),
+            ];
+        }
+    }
+    set_transient( $cache_key, $ranks, 30 * MINUTE_IN_SECONDS );
+    return $ranks;
+}
+
+/**
+ * 기자 순위 위젯 HTML — 우측 상단 월/주/일 버튼으로 패널 전환
+ * 세 기간을 모두 렌더링해 두고 JS로 보이기만 전환 (페이지 캐시 환경에서도 동작)
+ *
+ * @param string $skin        'aj'(엠버 저널) | 'default'(기본/SWN/NYT — Tailwind 카드)
+ * @param string $extra_class 카드에 추가할 클래스 (예: 'mb-6')
+ * @return string
+ */
+function lp_reporter_rank_widget_html( $skin = 'default', $extra_class = '' ) {
+    static $printed_assets = false;
+    $ranks   = lp_reporter_rank_list();
+    $periods = lp_reporter_rank_periods();
+    $is_aj   = $skin === 'aj';
+    $first   = array_key_first( $periods );
+
+    $html = '';
+    if ( ! $printed_assets ) {
+        $printed_assets = true;
+        $html .= '<style>
+            .lp-rk-tabs { margin-left:auto; display:flex; gap:2px; background:#f1f5f9; border-radius:9999px; padding:2px; }
+            .lp-rk-tab { font-size:11px; font-weight:600; line-height:1; padding:4px 9px; border-radius:9999px; color:#64748b; cursor:pointer; background:transparent; border:0; }
+            .lp-rk-tab[aria-selected="true"] { background:#0f172a; color:#fff; }
+            .amber-skin .lp-rk-tab[aria-selected="true"] { background:var(--aj-amber); }
+            .lp-rk-item { display:flex; align-items:center; gap:0.6rem; }
+            .lp-rk-num { width:1rem; flex-shrink:0; text-align:center; font-weight:900; }
+            .lp-rk-avatar { width:2rem !important; height:2rem !important; border-radius:9999px; object-fit:cover; flex-shrink:0; }
+            .lp-rk-name { display:block; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+            .lp-rk-meta { display:block; font-size:11px; color:#94a3b8; margin-top:1px; }
+            .lp-rk-basis { font-size:11px; line-height:1.5; color:#94a3b8; margin-top:0.9rem; padding-top:0.6rem; border-top:1px dashed #e2e8f0; }
+        </style>
+        <script>
+        document.addEventListener("click", function (e) {
+            var tab = e.target.closest(".lp-rk-tab");
+            if (!tab) return;
+            var box = tab.closest(".lp-rk-widget");
+            box.querySelectorAll(".lp-rk-tab").forEach(function (t) { t.setAttribute("aria-selected", t === tab ? "true" : "false"); });
+            box.querySelectorAll(".lp-rk-panel").forEach(function (p) { p.hidden = p.getAttribute("data-period") !== tab.getAttribute("data-period"); });
+        });
+        </script>';
+    }
+
+    $tabs = '<div class="lp-rk-tabs" role="tablist">';
+    foreach ( $periods as $pk => $pd ) {
+        $tabs .= '<button type="button" class="lp-rk-tab" role="tab" data-period="' . esc_attr( $pk ) . '" aria-selected="' . ( $pk === $first ? 'true' : 'false' ) . '">' . esc_html( $pd[0] ) . '</button>';
+    }
+    $tabs .= '</div>';
+
+    if ( $is_aj ) {
+        $html .= '<div class="aj-widget lp-rk-widget">';
+        $html .= '<div class="aj-widget-head"><span class="aj-widget-mark"></span><h2 class="aj-widget-title">기자 순위</h2>' . $tabs . '</div>';
+        $html .= '<div style="padding:0.75rem 1rem;">';
+    } else {
+        $html .= '<div class="lp-rk-widget bg-white p-6 rounded-xl border border-slate-200 shadow-sm ' . esc_attr( $extra_class ) . '">';
+        $html .= '<h3 class="font-bold text-slate-800 border-b border-slate-900 pb-2 mb-4 flex items-center gap-2">기자 순위' . $tabs . '</h3>';
+    }
+
+    foreach ( $periods as $pk => $pd ) {
+        $list   = $ranks[ $pk ] ?? [];
+        $html  .= '<div class="lp-rk-panel" role="tabpanel" data-period="' . esc_attr( $pk ) . '"' . ( $pk === $first ? '' : ' hidden' ) . '>';
+        if ( ! $list ) {
+            $html .= '<p class="text-sm text-slate-400 text-center py-4" style="font-size:0.8rem;color:#9ca3af;">해당 기간에 작성된 기사가 없습니다.</p>';
+            $html .= '<p class="lp-rk-basis">집계기간: ' . esc_html( $pd[3] ) . '</p></div>';
+            continue;
+        }
+        $html .= '<ol class="space-y-3 text-sm" style="display:flex;flex-direction:column;gap:0.75rem;">';
+        foreach ( $list as $i => $item ) {
+            $num_color = $i === 0
+                ? ( $is_aj ? 'var(--aj-amber)' : '#2563eb' )
+                : ( $i === 1 ? '#64748b' : '#94a3b8' );
+            $name = esc_html( $item['name'] );
+            $html .= '<li class="lp-rk-item">';
+            $html .= '<span class="lp-rk-num" style="color:' . $num_color . ';">' . ( $i + 1 ) . '</span>';
+            $html .= $item['avatar_html']; // get_avatar / Molongui 출력 (이미 이스케이프됨)
+            $html .= '<div style="min-width:0;flex:1;">';
+            $html .= $item['url']
+                ? '<a href="' . esc_url( $item['url'] ) . '" class="lp-rk-name text-slate-700 hover:text-blue-600 hover:underline transition">' . $name . '</a>'
+                : '<span class="lp-rk-name text-slate-700">' . $name . '</span>';
+            $html .= '<span class="lp-rk-meta">기사 ' . esc_html( $item['posts'] ) . '건 · 조회 ' . esc_html( $item['views'] ) . '회</span>';
+            $html .= '</div></li>';
+        }
+        $html .= '</ol>';
+        $html .= '<p class="lp-rk-basis">집계기간: ' . esc_html( $pd[3] ) . '</p></div>';
+    }
+
+    // 집계기준 — 가중치 (LP_RANK_WEIGHTS와 자동 동기화)
+    $labels = [ 'posts' => '기사 수', 'views' => '조회수', 'reactions' => '반응', 'comments' => '댓글', 'shares' => '공유' ];
+    $basis  = [];
+    foreach ( LP_RANK_WEIGHTS as $k => $w ) {
+        $basis[] = $labels[ $k ] . ' ' . round( $w * 100 ) . '%';
+    }
+    $html .= '<p class="lp-rk-basis" style="margin-top:0.25rem;border-top:0;padding-top:0;">집계기준: ' . esc_html( implode( ' · ', $basis ) ) . '</p>';
+
+    $html .= $is_aj ? '</div></div>' : '</div>';
     return $html;
 }
 
@@ -990,26 +1635,39 @@ function lp_get_post_authors( $post_id = null, $avatar_size = 64, $avatar_class 
         }
     }
 
-    /* ── Molongui Authorship ── */
-    if ( function_exists( 'molongui_get_post_authors' ) ) {
-        $ma_list = molongui_get_post_authors( $post_id );
-        foreach ( (array) $ma_list as $ma ) {
-            $uid  = ! empty( $ma->ID ) ? (int) $ma->ID : 0;
-            $bio  = ! empty( $ma->description )
-                ? $ma->description
-                : ( $uid ? (string) get_the_author_meta( 'description', $uid ) : '' );
-            $url  = $uid
-                ? get_author_posts_url( $uid )
-                : ( ! empty( $ma->link ) ? $ma->link : '' );
-            $name = ! empty( $ma->display_name ) ? $ma->display_name : ( ! empty( $ma->name ) ? $ma->name : '' );
-            if ( ! empty( $ma->avatar ) ) {
-                $av_html = '<img src="' . esc_url( $ma->avatar ) . '" width="' . (int) $avatar_size . '" height="' . (int) $avatar_size . '"'
-                         . ( $avatar_class ? ' class="' . esc_attr( $avatar_class ) . '"' : '' ) . ' alt="' . esc_attr( $name ) . '" loading="lazy">';
-            } else {
-                $av_html = get_avatar( $uid, $avatar_size, '', esc_attr( $name ), $av_attr );
+    /* ── Molongui Authorship (5.x, 공동 저자 개별 카드 지원) ──
+       구버전 API(molongui_get_post_authors())는 이 플러그인 버전에 존재하지 않아
+       실제 클래스(\Molongui\Authorship\Post / Author)를 직접 사용합니다. */
+    if ( class_exists( '\Molongui\Authorship\Post' ) && class_exists( '\Molongui\Authorship\Author' ) ) {
+        $ma_refs = \Molongui\Authorship\Post::get_authors( $post_id );
+        foreach ( (array) $ma_refs as $ma_ref ) {
+            if ( empty( $ma_ref->id ) || empty( $ma_ref->type ) ) {
+                continue;
             }
+            $ma_author = new \Molongui\Authorship\Author( (int) $ma_ref->id, $ma_ref->type );
+
+            $name = (string) $ma_author->get_display_name();
+            if ( ! $name ) {
+                continue;
+            }
+
+            $bio = (string) $ma_author->get_description();
+            if ( ! $bio && 'user' === $ma_ref->type ) {
+                $bio = (string) get_the_author_meta( 'description', (int) $ma_ref->id );
+            }
+
+            $url = (string) $ma_author->get_archive_url();
+            if ( '#molongui-disabled-link' === $url ) {
+                $url = ''; // 게스트 저자는 아카이브 페이지가 없음
+            }
+
+            $av_html = $ma_author->get_avatar( [ $avatar_size, $avatar_size ], 'screen' );
+            if ( $avatar_class && $av_html ) {
+                $av_html = preg_replace( '/class=([\'"])/', 'class=$1' . esc_attr( $avatar_class ) . ' ', $av_html, 1 );
+            }
+
             $authors[] = [
-                'id'          => $uid,
+                'id'          => (int) $ma_ref->id,
                 'name'        => $name,
                 'description' => $bio,
                 'url'         => $url,
@@ -1235,7 +1893,7 @@ function lp_skin_vars() {
     $current_theme_style = in_array( $saved_style, $allowed_styles, true ) ? $saved_style : 'swn-style';
 
     if ( $current_theme_style === 'swn-style' ) {
-        $body_class      = 'bg-white text-slate-900 font-sans';
+        $body_class      = 'bg-white text-slate-900 font-sans swn-skin';
         $container_class = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8';
     } elseif ( $current_theme_style === 'newyorktimes-style' ) {
         $body_class      = 'bg-white text-black font-serif nyt-skin';
@@ -1497,15 +2155,35 @@ function lp_get_logo_html( $skin = 'swn' ) {
     $logo_w     = max( 40, (int) get_theme_mod( 'lp_logo_width', 200 ) );
     $home       = esc_url( home_url( '/' ) );
 
+    // '로고 유형'을 따로 "이미지"로 바꾸지 않고 이미지/SVG만 업로드한 경우에도
+    // 텍스트 로고 대신 업로드한 로고가 바로 표시되도록 자동 전환합니다.
+    // (유형을 명시적으로 "이미지"/"SVG"로 선택한 경우는 기존 로직 그대로 존중됩니다.)
+    if ( $logo_type === 'text' ) {
+        if ( $logo_img !== '' ) {
+            $logo_type = 'image';
+        } elseif ( $logo_svg !== '' ) {
+            $logo_type = 'svg';
+        }
+    }
+
     ob_start();
 
     if ( $logo_type === 'image' && $logo_img ) {
-        // ── 이미지 로고 ──────────────────────────────────────
+        // ── 이미지 로고 (다크모드 전용 로고가 있으면 함께 출력 후 CSS로 전환) ──
+        $logo_img_dark = get_theme_mod( 'lp_logo_image_dark', '' );
         echo '<a href="' . $home . '" class="lp-logo-wrap" aria-label="' . esc_attr( $site_name ) . '">';
         echo '<img src="' . esc_url( $logo_img ) . '"'
            . ' alt="' . esc_attr( $site_name ) . '"'
+           . ' class="' . ( $logo_img_dark ? 'lp-logo-light-img' : '' ) . '"'
            . ' style="max-width:' . $logo_w . 'px;height:auto;display:block;"'
            . ' loading="eager">';
+        if ( $logo_img_dark ) {
+            echo '<img src="' . esc_url( $logo_img_dark ) . '"'
+               . ' alt="' . esc_attr( $site_name ) . '"'
+               . ' class="lp-logo-dark-img"'
+               . ' style="max-width:' . $logo_w . 'px;height:auto;display:block;"'
+               . ' loading="eager">';
+        }
         if ( $show_name ) {
             echo '<span class="lp-logo-name-sub">' . esc_html( $site_name ) . '</span>';
         }
@@ -1549,12 +2227,169 @@ function lp_get_logo_html( $skin = 'swn' ) {
 }
 
 /**
+ * 푸터 로고 HTML 반환 — 라이트/다크모드 로고를 업로드한 경우 함께 출력해
+ * CSS(html.dark)로 자동 전환되도록 하고, 둘 다 없으면 푸터 회사명 텍스트로 대체합니다.
+ * 한쪽만 업로드된 경우 같은 이미지를 라이트/다크 모두에 사용합니다.
+ *
+ * @return string 이미지 태그(들) 또는 esc_html 처리된 회사명 텍스트
+ */
+function lp_get_footer_logo_html() {
+    $light = get_theme_mod( 'lp_footer_logo_light', '' );
+    $dark  = get_theme_mod( 'lp_footer_logo_dark', '' );
+    $name  = get_theme_mod( 'lp_footer_company_name', get_bloginfo( 'name' ) );
+
+    if ( ! $light && ! $dark ) {
+        return esc_html( $name );
+    }
+
+    $light_src = $light ?: $dark;
+    $dark_src  = $dark ?: $light;
+
+    return '<img src="' . esc_url( $light_src ) . '" alt="' . esc_attr( $name ) . '" class="lp-logo-light-img" loading="eager">'
+         . '<img src="' . esc_url( $dark_src ) . '" alt="' . esc_attr( $name ) . '" class="lp-logo-dark-img" loading="eager">';
+}
+
+/**
+ * 헤더 로고(lp_logo_image) 이미지의 첨부파일 ID를 반환합니다.
+ * 특성 이미지가 없는 게시물의 대체 썸네일로 사용됩니다.
+ *
+ * @return int 첨부파일 ID (없으면 0)
+ */
+function lp_get_default_thumbnail_attachment_id() {
+    static $id = null;
+    if ( $id !== null ) {
+        return $id;
+    }
+
+    $logo_url = get_theme_mod( 'lp_logo_image', '' );
+    $id       = $logo_url ? (int) attachment_url_to_postid( $logo_url ) : 0;
+
+    if ( ! $id ) {
+        $id = (int) get_theme_mod( 'custom_logo', 0 );
+    }
+
+    return $id;
+}
+
+/**
+ * 특성 이미지가 없는 글에 기본 SVG 로고를 대체 썸네일로 강제 지정합니다.
+ * has_post_thumbnail() / the_post_thumbnail() / get_the_post_thumbnail()가
+ * 내부적으로 참조하는 get_post_thumbnail_id() 필터를 사용하므로,
+ * 테마 템플릿 코드를 수정하지 않고도 모든 위치에 동일하게 적용됩니다.
+ */
+add_filter( 'post_thumbnail_id', 'lp_force_default_thumbnail', 10, 2 );
+function lp_force_default_thumbnail( $thumbnail_id, $post ) {
+    if ( $thumbnail_id ) {
+        return $thumbnail_id; // 이미 특성 이미지가 있으면 그대로 사용
+    }
+    if ( ! $post || 'post' !== $post->post_type ) {
+        return $thumbnail_id;
+    }
+
+    $default_id = lp_get_default_thumbnail_attachment_id();
+    return $default_id ?: $thumbnail_id;
+}
+
+/**
+ * 위 대체 썸네일로 렌더링된 <img> 태그에만 식별용 클래스를 부여합니다.
+ * (헤더·푸터 로고는 wp_get_attachment_image()를 거치지 않는 별도 마크업이라 영향 없음)
+ */
+add_filter( 'wp_get_attachment_image_attributes', 'lp_mark_default_thumbnail_img', 10, 2 );
+function lp_mark_default_thumbnail_img( $attr, $attachment ) {
+    $default_id = lp_get_default_thumbnail_attachment_id();
+    if ( $default_id && (int) $attachment->ID === $default_id ) {
+        $attr['class'] = trim( ( $attr['class'] ?? '' ) . ' lp-thumb-fallback-logo' );
+    }
+    return $attr;
+}
+
+/**
+ * 헤더 상단 날짜 — "2026년 10월 7일 수요일 · 최종편집 2026.10.07 14:32"
+ * PHP date()는 UTC·영문 요일이라 사이트 시간대(wp_date) + 한국어 요일로 직접 조합.
+ * 최종편집 = 발행된 기사(post) 중 가장 최근 수정 시각.
+ *
+ * @return string HTML (이스케이프 완료)
+ */
+function lp_header_date_html() {
+    $weekdays = [ '일', '월', '화', '수', '목', '금', '토' ];
+    $html     = esc_html( wp_date( 'Y년 n월 j일 ' ) . $weekdays[ (int) wp_date( 'w' ) ] . '요일' );
+
+    $last = get_lastpostmodified( 'blog', 'post' ); // 사이트 시간대 'Y-m-d H:i:s'
+    if ( $last ) {
+        $html .= ' <span class="lp-last-edit">· 최종편집 ' . esc_html( mysql2date( 'Y.m.d H:i', $last ) ) . '</span>';
+    }
+    return $html;
+}
+
+/**
  * 헤더 태그라인 반환 — 커스터마이저 값 우선, 없으면 WP 태그라인
  */
 function lp_get_tagline() {
     $tag = get_theme_mod( 'lp_site_tagline', '' );
     return $tag !== '' ? $tag : get_bloginfo( 'description' );
 }
+
+/**
+ * 헤더 우측 "유저 메뉴" HTML — 다크모드 토글 옆에 출력한다.
+ * 비로그인: 사람 아이콘 버튼 → 드롭다운에 로그인 · 회원가입
+ * 로그인:   이름 앞글자 아바타 버튼 → 드롭다운에 내 프로필 · 내 기사 목록
+ *
+ * 주의: 이 함수는 로그인 여부와 무관하게 항상 "비로그인" 상태의 마크업만
+ * 서버에서 렌더링한다. 이 사이트처럼 전체 페이지 캐시(WP Super Cache 등)가
+ * 켜져 있으면, 로그인한 특정 회원의 이름·프로필 링크를 여기서 직접 출력할 경우
+ * 그 값이 캐시된 정적 HTML에 그대로 구워져 이후 그 페이지를 방문하는 다른
+ * 모든 사용자(다른 회원 포함)에게 동일하게 노출되는 문제가 생긴다.
+ * ("내 기사 목록"에 다른 회원의 글이 뜨는 문제가 바로 이것)
+ * 그래서 로그인 상태의 개인화된 내용은 여기서 굽지 않고, 아래
+ * lp_ajax_user_menu()를 통해 매 방문마다 admin-ajax.php로 따로 받아와
+ * (이 요청은 캐시 플러그인이 캐시하지 않는다) JS가 클라이언트에서 채워 넣는다.
+ * → 관련 JS: footer.php의 "유저 메뉴 개인화 정보" 스크립트
+ *
+ * @param int $icon_size 아이콘의 px 크기 (스킨별 다크모드 아이콘 크기와 맞춤)
+ */
+function lp_get_user_menu_html( $icon_size = 18 ) {
+    ob_start();
+    ?>
+    <div class="lp-user-menu" id="lpUserMenu">
+        <button type="button" class="lp-dm-btn lp-user-btn" id="lpUserBtn" aria-haspopup="true" aria-expanded="false" title="로그인 / 회원가입">
+            <svg width="<?php echo (int) $icon_size; ?>" height="<?php echo (int) $icon_size; ?>" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <ul class="lp-user-dropdown" id="lpUserDropdown">
+            <li><a href="<?php echo esc_url( wp_login_url( home_url( add_query_arg( [], null ) ) ) ); ?>">로그인</a></li>
+            <li><a href="<?php echo esc_url( wp_registration_url() ); ?>">회원가입</a></li>
+        </ul>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+
+/**
+ * AJAX: 현재 로그인한 사용자의 유저 메뉴 개인화 데이터를 반환한다.
+ * admin-ajax.php 요청은 페이지 캐시 플러그인이 캐시하지 않으므로,
+ * 매 방문자마다 항상 "그 방문자 본인"의 정확한 정보를 반환한다.
+ */
+function lp_ajax_user_menu() {
+    nocache_headers(); // 혹시 모를 중간 캐시(프록시 등)까지 차단
+
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_success( [ 'loggedIn' => false ] );
+    }
+
+    $lp_user    = wp_get_current_user();
+    $lp_initial = function_exists( 'mb_strtoupper' )
+        ? mb_strtoupper( mb_substr( $lp_user->display_name, 0, 1 ) )
+        : strtoupper( substr( $lp_user->display_name, 0, 1 ) );
+
+    wp_send_json_success( [
+        'loggedIn'   => true,
+        'name'       => $lp_user->display_name,
+        'initial'    => $lp_initial,
+        'profileUrl' => get_edit_profile_url( $lp_user->ID ),
+        'postsUrl'   => get_author_posts_url( $lp_user->ID ),
+    ] );
+}
+add_action( 'wp_ajax_lp_user_menu', 'lp_ajax_user_menu' );
+add_action( 'wp_ajax_nopriv_lp_user_menu', 'lp_ajax_user_menu' );
 
 /**
  * larapress_layout_style Customizer 설정값 sanitize — 허용 목록 외 값은 기본값으로 대체
@@ -1825,6 +2660,36 @@ function larapress_moderate_comment() {
 add_action( 'admin_post_lara_moderate_comment', 'larapress_moderate_comment' );
 
 // ─────────────────────────────────────────────────────────────
+// 기사 공유 수 집계 — post_meta 'lp_shares' ("많이 본 뉴스" 랭킹에 사용)
+// 페이지 캐시(WP Super Cache) 환경이라 nonce 대신 쿠키로 같은 브라우저의
+// 같은 글 공유는 하루 1회만 집계한다.
+// ─────────────────────────────────────────────────────────────
+function larapress_track_share() {
+    $post_id  = intval( $_POST['post_id'] ?? 0 );
+    $platform = sanitize_key( $_POST['platform'] ?? '' );
+
+    if ( ! $post_id || ! in_array( $platform, [ 'facebook', 'x', 'twitter', 'kakao' ], true ) ) {
+        wp_send_json_error( [ 'message' => 'invalid' ] );
+    }
+    $post = get_post( $post_id );
+    if ( ! $post || $post->post_type !== 'post' || $post->post_status !== 'publish' ) {
+        wp_send_json_error( [ 'message' => 'not_found' ] );
+    }
+
+    $cookie_name = 'lp_sh_' . $post_id;
+    if ( isset( $_COOKIE[ $cookie_name ] ) ) {
+        wp_send_json_success( [ 'counted' => false ] );
+    }
+    setcookie( $cookie_name, '1', time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN );
+
+    $shares = (int) get_post_meta( $post_id, 'lp_shares', true ) + 1;
+    update_post_meta( $post_id, 'lp_shares', $shares );
+    wp_send_json_success( [ 'counted' => true ] );
+}
+add_action( 'wp_ajax_lp_track_share', 'larapress_track_share' );
+add_action( 'wp_ajax_nopriv_lp_track_share', 'larapress_track_share' );
+
+// ─────────────────────────────────────────────────────────────
 // 기사 반응(Reaction) 시스템
 // ─────────────────────────────────────────────────────────────
 
@@ -1860,7 +2725,7 @@ function lp_get_user_reactions( $post_id ) {
 /**
  * AJAX 핸들러 — 반응 토글
  * 로그인 사용자 : user_meta 로 중복 방지 + 토글(취소 가능)
- * 비로그인 사용자: 카운트 증가만, 중복 방지는 클라이언트 localStorage
+ * 비로그인 사용자: 쿠키(lp_rx_<post_id>)로 중복 방지 + 토글(취소 가능)
  */
 function larapress_handle_reaction() {
     check_ajax_referer( 'lp_reaction_nonce', 'nonce' );
@@ -1882,7 +2747,8 @@ function larapress_handle_reaction() {
     if ( ! is_array( $reactions ) ) $reactions = [];
     if ( ! isset( $reactions[ $type ] ) ) $reactions[ $type ] = 0;
 
-    $active = true;
+    $active    = true;
+    $prev_type = null;
 
     if ( is_user_logged_in() ) {
         $user_id        = get_current_user_id();
@@ -1891,8 +2757,6 @@ function larapress_handle_reaction() {
 
         $post_key            = 'p' . $post_id;
         $user_post_reactions = $user_reactions[ $post_key ] ?? [];
-
-        $prev_type = null;
 
         if ( in_array( $type, $user_post_reactions, true ) ) {
             // 같은 반응 다시 클릭 → 취소(토글 오프)
@@ -1915,8 +2779,33 @@ function larapress_handle_reaction() {
         $user_reactions[ $post_key ] = $user_post_reactions;
         update_user_meta( $user_id, 'lp_user_reactions', $user_reactions );
     } else {
-        // 비로그인: 증가만
-        $reactions[ $type ]++;
+        // 비로그인: 쿠키에 저장된 기존 반응과 비교해 서버 측에서 중복 증가를 차단
+        $cookie_name = 'lp_rx_' . $post_id;
+        $prev_saved  = isset( $_COOKIE[ $cookie_name ] ) ? sanitize_key( $_COOKIE[ $cookie_name ] ) : '';
+        $new_cookie_value = $type;
+
+        if ( $prev_saved !== '' && $prev_saved === $type ) {
+            // 같은 반응 다시 클릭 → 취소(토글 오프)
+            $reactions[ $type ] = max( 0, $reactions[ $type ] - 1 );
+            $active           = false;
+            $new_cookie_value = '';
+        } else {
+            if ( $prev_saved !== '' && in_array( $prev_saved, $allowed, true ) ) {
+                // 기존 반응이 있으면 취소 후 교체 (포스트당 1개 제한)
+                $prev_type = $prev_saved;
+                if ( ! isset( $reactions[ $prev_type ] ) ) $reactions[ $prev_type ] = 0;
+                $reactions[ $prev_type ] = max( 0, $reactions[ $prev_type ] - 1 );
+            }
+            $reactions[ $type ]++;
+        }
+
+        if ( $new_cookie_value === '' ) {
+            setcookie( $cookie_name, '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN );
+            unset( $_COOKIE[ $cookie_name ] );
+        } else {
+            setcookie( $cookie_name, $new_cookie_value, time() + YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN );
+            $_COOKIE[ $cookie_name ] = $new_cookie_value;
+        }
     }
 
     update_post_meta( $post_id, 'lp_reactions', $reactions );
@@ -1934,3 +2823,328 @@ function larapress_handle_reaction() {
 }
 add_action( 'wp_ajax_lp_react',        'larapress_handle_reaction' );
 add_action( 'wp_ajax_nopriv_lp_react', 'larapress_handle_reaction' );
+
+// ─────────────────────────────────────────────────────────────
+// 753번 "About Us" 페이지 — "청라온을 만드는 사람들" 인물 모달
+//
+// 예전에 사용하던 팀원 소개 플러그인(neeon_team CPT)은 삭제되었지만
+// 그 당시 등록된 인물 데이터(postmeta 포함)는 DB에 그대로 남아있음.
+// 해당 CPT를 다시 등록하지 않고도 get_post()/get_post_meta()로
+// 직접 조회해 모달에 뿌려준다. (post_type이 등록되어 있지 않아도
+// 이 함수들은 정상 동작함 — WP_Query 등 목록 조회에만 등록이 필요)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 팀원 소개글(경력/수상이력 형식의 텍스트)을 항목별 리스트 HTML로 변환.
+ * 원본 형식 예:
+ *   경력:
+ *   1. ...
+ *   2. ...
+ *
+ *   수상이력:
+ *   1. ...
+ */
+function larapress_parse_team_bio( $raw ) {
+    $raw   = str_replace( [ "\r\n", "\r" ], "\n", (string) $raw );
+    $lines = explode( "\n", $raw );
+
+    $sections = [ 'career' => [], 'awards' => [] ];
+    $current  = null;
+
+    foreach ( $lines as $line ) {
+        $line = trim( wp_strip_all_tags( $line ) );
+        $line = str_replace( '&nbsp;', '', $line );
+        $line = trim( $line );
+
+        if ( $line === '' ) {
+            continue;
+        }
+
+        if ( preg_match( '/^경력\s*:?$/u', $line ) ) {
+            $current = 'career';
+            continue;
+        }
+        if ( preg_match( '/^수상\s*이력\s*:?$/u', $line ) ) {
+            $current = 'awards';
+            continue;
+        }
+        if ( ! $current ) {
+            continue;
+        }
+
+        // "1. 내용" 형태면 번호를 떼고 저장 (목록 태그가 알아서 번호를 매김)
+        if ( preg_match( '/^\d+\.\s*(.+)$/u', $line, $m ) ) {
+            $sections[ $current ][] = $m[1];
+        } else {
+            $sections[ $current ][] = $line;
+        }
+    }
+
+    $to_html = function ( $items ) {
+        if ( empty( $items ) ) {
+            return '<p class="text-slate-400">등록된 내용이 없습니다.</p>';
+        }
+        $html = '<ol class="list-decimal list-inside space-y-1.5 leading-relaxed">';
+        foreach ( $items as $item ) {
+            $html .= '<li>' . esc_html( $item ) . '</li>';
+        }
+        $html .= '</ol>';
+        return $html;
+    };
+
+    return [
+        'career_html' => $to_html( $sections['career'] ),
+        'awards_html' => $to_html( $sections['awards'] ),
+    ];
+}
+
+/**
+ * AJAX: 팀원 1명의 데이터를 JSON으로 반환 (753페이지 모달용)
+ */
+function larapress_ajax_get_team_member() {
+    check_ajax_referer( 'lp_team_modal', 'nonce' );
+
+    $member_id = isset( $_POST['member_id'] ) ? absint( $_POST['member_id'] ) : 0;
+    $post      = $member_id ? get_post( $member_id ) : null;
+
+    // neeon_team CPT는 더이상 등록되어 있지 않으므로, 저장된 post_type 문자열로만 검증.
+    // 게시(publish) 상태인 팀원만 공개 — 초안(draft)은 노출하지 않음.
+    if ( ! $post || $post->post_type !== 'neeon_team' || $post->post_status !== 'publish' ) {
+        wp_send_json_error( [ 'message' => 'not_found' ], 404 );
+    }
+
+    $position = get_post_meta( $member_id, 'neeon_team_position', true );
+    $email    = get_post_meta( $member_id, 'neeon_team_email', true );
+    $website  = get_post_meta( $member_id, 'neeon_team_website', true );
+    $socials  = get_post_meta( $member_id, 'neeon_team_socials', true );
+
+    if ( ! is_array( $socials ) ) {
+        $socials = [];
+    }
+    $socials = array_filter( $socials, function ( $v ) {
+        return is_string( $v ) && trim( $v ) !== '';
+    } );
+
+    $photo = get_the_post_thumbnail_url( $member_id, 'medium' );
+    if ( ! $photo ) {
+        $photo = get_the_post_thumbnail_url( $member_id, 'full' );
+    }
+
+    $bio = larapress_parse_team_bio( $post->post_content );
+
+    // 이메일은 로그인 회원에게만 공개 — 비로그인 사용자에게는 잠금 여부만 알려준다.
+    $has_email       = is_email( $email );
+    $can_view_email  = is_user_logged_in();
+
+    wp_send_json_success( [
+        'name'        => get_the_title( $member_id ),
+        'position'    => $position ?: '',
+        'email'       => ( $has_email && $can_view_email ) ? $email : '',
+        'email_locked'=> ( $has_email && ! $can_view_email ),
+        'website'     => $website ? esc_url_raw( $website ) : '',
+        'socials'     => $socials,
+        'photo'       => $photo ?: '',
+        'career_html' => $bio['career_html'],
+        'awards_html' => $bio['awards_html'],
+    ] );
+}
+add_action( 'wp_ajax_lp_get_team_member',        'larapress_ajax_get_team_member' );
+add_action( 'wp_ajax_nopriv_lp_get_team_member', 'larapress_ajax_get_team_member' );
+
+/**
+ * 753페이지에서만 모달 마크업 + 클릭 핸들러 JS 출력.
+ * (인물 카드 자체는 post_content 안에 class="lp-team-card" data-member-id="..." 로 이미 마킹되어 있음)
+ */
+function larapress_print_team_modal() {
+    if ( ! is_page( 753 ) ) {
+        return;
+    }
+
+    $ajax_url  = esc_url( admin_url( 'admin-ajax.php' ) );
+    $nonce     = wp_create_nonce( 'lp_team_modal' );
+    $login_url = esc_url( wp_login_url( get_permalink() ) );
+    ?>
+    <div id="lp-team-modal" class="hidden fixed inset-0 z-[9999] items-center justify-center p-4" aria-hidden="true">
+        <div class="absolute inset-0 bg-black/60" data-lp-team-close></div>
+        <div class="relative bg-white w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl shadow-xl p-6 md:p-8" role="dialog" aria-modal="true" aria-labelledby="lp-team-modal-name">
+            <button type="button" data-lp-team-close aria-label="닫기" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div id="lp-team-modal-loading" class="text-center text-sm text-slate-400 py-16">불러오는 중...</div>
+            <div id="lp-team-modal-error" class="hidden text-center text-sm text-red-500 py-16">정보를 불러오지 못했습니다.</div>
+
+            <div id="lp-team-modal-content" class="hidden">
+                <div class="text-center mb-6">
+                    <img id="lp-team-modal-photo" src="" alt="" class="w-28 h-28 rounded-full object-cover mx-auto mb-4 border border-slate-200">
+                    <h3 id="lp-team-modal-name" class="text-xl font-black text-slate-900"></h3>
+                    <p id="lp-team-modal-position" class="text-sm font-bold text-blue-700 mt-1"></p>
+                </div>
+
+                <div id="lp-team-modal-contact" class="flex flex-wrap items-center justify-center gap-2 mb-6"></div>
+
+                <div class="space-y-5 text-left">
+                    <div>
+                        <h4 class="text-xs font-extrabold tracking-widest text-slate-400 uppercase mb-2">경력</h4>
+                        <div id="lp-team-modal-career" class="text-sm text-slate-600"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-extrabold tracking-widest text-slate-400 uppercase mb-2">수상이력</h4>
+                        <div id="lp-team-modal-awards" class="text-sm text-slate-600"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var AJAX_URL   = '<?php echo $ajax_url; ?>';
+        var NONCE      = '<?php echo esc_js( $nonce ); ?>';
+        var LOGIN_URL  = '<?php echo $login_url; ?>';
+        var modal      = document.getElementById('lp-team-modal');
+        var loadingEl  = document.getElementById('lp-team-modal-loading');
+        var errorEl    = document.getElementById('lp-team-modal-error');
+        var contentEl  = document.getElementById('lp-team-modal-content');
+        var cache      = {};
+        var lastFocus  = null;
+
+        function openModal() {
+            lastFocus = document.activeElement;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('overflow-hidden');
+            if (lastFocus) lastFocus.focus();
+        }
+
+        function showState(state) {
+            loadingEl.classList.toggle('hidden', state !== 'loading');
+            errorEl.classList.toggle('hidden', state !== 'error');
+            contentEl.classList.toggle('hidden', state !== 'content');
+        }
+
+        function socialLabel(key) {
+            var labels = {
+                facebook: '페이스북', twitter: '트위터', linkedin: '링크드인',
+                behance: '비핸스', dribbble: '드리블', skype: '스카이프',
+                youtube: '유튜브', pinterest: '핀터레스트', instagram: '인스타그램',
+                github: '깃허브', stackoverflow: '스택오버플로우', tiktok: '틱톡'
+            };
+            return labels[key] || key;
+        }
+
+        function render(data) {
+            document.getElementById('lp-team-modal-photo').src = data.photo || '';
+            document.getElementById('lp-team-modal-photo').alt = data.name || '';
+            document.getElementById('lp-team-modal-name').textContent = data.name || '';
+            document.getElementById('lp-team-modal-position').textContent = data.position || '';
+            document.getElementById('lp-team-modal-career').innerHTML = data.career_html || '';
+            document.getElementById('lp-team-modal-awards').innerHTML = data.awards_html || '';
+
+            var contact = document.getElementById('lp-team-modal-contact');
+            contact.innerHTML = '';
+
+            var chipClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-bold text-slate-600 hover:border-blue-500 hover:text-blue-700 transition';
+
+            if (data.email) {
+                var a = document.createElement('a');
+                a.href = 'mailto:' + data.email;
+                a.className = chipClass;
+                a.textContent = '✉ ' + data.email;
+                contact.appendChild(a);
+            } else if (data.email_locked) {
+                var locked = document.createElement('a');
+                locked.href = LOGIN_URL;
+                locked.className = chipClass;
+                locked.title = '로그인 후 이메일을 확인할 수 있습니다';
+                locked.textContent = '🔒 로그인 후 이메일 확인';
+                contact.appendChild(locked);
+            }
+            if (data.website) {
+                var w = document.createElement('a');
+                w.href = data.website;
+                w.target = '_blank';
+                w.rel = 'noopener noreferrer';
+                w.className = chipClass;
+                w.textContent = '🔗 웹사이트';
+                contact.appendChild(w);
+            }
+            if (data.socials) {
+                Object.keys(data.socials).forEach(function (key) {
+                    var url = data.socials[key];
+                    if (!url) return;
+                    var s = document.createElement('a');
+                    s.href = url;
+                    s.target = '_blank';
+                    s.rel = 'noopener noreferrer';
+                    s.className = chipClass;
+                    s.textContent = socialLabel(key);
+                    contact.appendChild(s);
+                });
+            }
+
+            showState('content');
+        }
+
+        function loadMember(id) {
+            openModal();
+
+            if (cache[id]) {
+                render(cache[id]);
+                return;
+            }
+
+            showState('loading');
+
+            var fd = new FormData();
+            fd.append('action', 'lp_get_team_member');
+            fd.append('nonce', NONCE);
+            fd.append('member_id', id);
+
+            fetch(AJAX_URL, { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.success) { showState('error'); return; }
+                    cache[id] = res.data;
+                    render(res.data);
+                })
+                .catch(function () { showState('error'); });
+        }
+
+        document.addEventListener('click', function (e) {
+            var card = e.target.closest('.lp-team-card');
+            if (card && card.dataset.memberId) {
+                loadMember(card.dataset.memberId);
+                return;
+            }
+            if (e.target.closest('[data-lp-team-close]')) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                var card = e.target.closest && e.target.closest('.lp-team-card');
+                if (card && card.dataset.memberId) {
+                    e.preventDefault();
+                    loadMember(card.dataset.memberId);
+                }
+                return;
+            }
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+    })();
+    </script>
+    <?php
+}
+add_action( 'wp_footer', 'larapress_print_team_modal' );

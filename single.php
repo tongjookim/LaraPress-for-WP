@@ -16,7 +16,7 @@ if ( $current_theme_style === 'newyorktimes-style' ) {
     $lp_main_class    = 'py-8';
     $lp_sidebar_class = 'basic-sidebar-area';
 } elseif ( $current_theme_style !== 'amber-journal' ) {
-    $lp_main_class    = 'py-10 bg-slate-50';
+    $lp_main_class    = 'py-6 md:py-10 bg-slate-50';
     $lp_sidebar_class = '';
 }
 
@@ -88,7 +88,13 @@ if ( $current_theme_style === 'amber-journal' ) :
             <article class="aj-single-article" id="aj-article" itemscope itemtype="https://schema.org/NewsArticle">
 
                 <?php if ( has_post_thumbnail() ) : ?>
-                <?php the_post_thumbnail( 'large', [ 'class' => 'aj-single-hero', 'itemprop' => 'image' ] ); ?>
+                <figure class="aj-single-hero-figure">
+                    <?php the_post_thumbnail( 'large', [ 'class' => 'aj-single-hero', 'itemprop' => 'image' ] ); ?>
+                    <?php $aj_hero_caption = get_the_post_thumbnail_caption(); ?>
+                    <?php if ( $aj_hero_caption ) : ?>
+                    <figcaption class="aj-hero-caption"><?php echo esc_html( $aj_hero_caption ); ?></figcaption>
+                    <?php endif; ?>
+                </figure>
                 <?php endif; ?>
 
                 <div class="aj-single-body">
@@ -128,6 +134,8 @@ if ( $current_theme_style === 'amber-journal' ) :
                             <?php echo get_the_modified_date( 'Y.m.d H:i' ); ?> 수정
                         </span>
                         <?php endif; ?>
+                        <span aria-hidden="true">·</span>
+                        <span>조회 <?php echo number_format( (int) get_post_meta( get_the_ID(), 'lara_post_views', true ) ); ?>회</span>
 
                         <!-- 유틸 툴바: 글자 크기 / 프린트 / 공유 -->
                         <div class="aj-util-toolbar" style="margin-left:auto;">
@@ -169,16 +177,54 @@ if ( $current_theme_style === 'amber-journal' ) :
                     <?php $aj_tags = get_the_tags(); ?>
                     <?php if ( $aj_tags ) : ?>
                     <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--aj-border);display:flex;flex-wrap:wrap;gap:0.4rem;">
-                        <?php foreach ( $aj_tags as $aj_tag ) : ?>
-                        <a href="<?php echo esc_url( get_tag_link( $aj_tag->term_id ) ); ?>"
+                        <?php foreach ( $aj_tags as $aj_i => $aj_tag ) : ?>
+                        <a href="<?php echo esc_url( get_tag_link( $aj_tag->term_id ) ); ?>"<?php if ( $aj_i >= 3 ) echo ' data-lp-tag-extra hidden'; ?>
                            style="font-size:0.75rem;padding:0.25rem 0.7rem;border:1px solid var(--aj-border);border-radius:9999px;color:var(--aj-muted);text-decoration:none;transition:border-color 0.15s,color 0.15s;"
                            onmouseover="this.style.borderColor='var(--aj-amber)';this.style.color='var(--aj-amber)';"
                            onmouseout="this.style.borderColor='var(--aj-border)';this.style.color='var(--aj-muted)';">
                             #<?php echo esc_html( $aj_tag->name ); ?>
                         </a>
                         <?php endforeach; ?>
+                        <?php if ( count( $aj_tags ) > 3 ) : ?>
+                        <button type="button"
+                                style="font-size:0.75rem;padding:0.25rem 0.7rem;border:1px dashed var(--aj-border);border-radius:9999px;background:none;color:var(--aj-muted);cursor:pointer;"
+                                onclick="this.parentNode.querySelectorAll('[data-lp-tag-extra]').forEach(function(t){t.hidden=false;});this.remove();">
+                            +<?php echo count( $aj_tags ) - 3; ?> 더보기
+                        </button>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
+
+                    <!-- 기사 반응 버튼 (AJ) -->
+                    <?php
+                    $aj_rx_types = lp_reaction_types();
+                    $aj_rx_data  = get_post_meta( get_the_ID(), 'lp_reactions', true );
+                    $aj_rx_data  = is_array( $aj_rx_data ) ? $aj_rx_data : [];
+                    $aj_rx_mine  = lp_get_user_reactions( get_the_ID() );
+                    $aj_rx_nonce = wp_create_nonce( 'lp_reaction_nonce' );
+                    ?>
+                    <div class="aj-reactions lp-reactions"
+                         id="lp-reactions"
+                         data-post-id="<?php echo get_the_ID(); ?>"
+                         data-nonce="<?php echo esc_attr( $aj_rx_nonce ); ?>"
+                         data-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>">
+                        <p class="lp-rx-label">이 기사에 반응을 남겨주세요</p>
+                        <div class="lp-rx-btns">
+                        <?php foreach ( $aj_rx_types as $rtype => $rinfo ) :
+                            $rcount  = (int) ( $aj_rx_data[ $rtype ] ?? 0 );
+                            $ractive = in_array( $rtype, $aj_rx_mine, true );
+                        ?>
+                        <button class="lp-rx-btn<?php echo $ractive ? ' is-reacted' : ''; ?>"
+                                data-type="<?php echo esc_attr( $rtype ); ?>"
+                                aria-label="<?php echo esc_attr( $rinfo['label'] ); ?>"
+                                aria-pressed="<?php echo $ractive ? 'true' : 'false'; ?>">
+                            <span class="lp-rx-emoji" aria-hidden="true"><?php echo $rinfo['emoji']; ?></span>
+                            <span class="lp-rx-name"><?php echo esc_html( $rinfo['label'] ); ?></span>
+                            <span class="lp-rx-count" id="lp-rx-count-<?php echo esc_attr( $rtype ); ?>"><?php echo $rcount > 0 ? number_format( $rcount ) : ''; ?></span>
+                        </button>
+                        <?php endforeach; ?>
+                        </div>
+                    </div>
 
                     <!-- 기자 프로필 서명 (복수 저자 지원) -->
                     <?php
@@ -300,6 +346,19 @@ if ( $current_theme_style === 'amber-journal' ) :
                     <?php echo lp_aj_hot_news_html(); ?>
                 </div>
 
+                <!-- 인기 검색어 위젯 -->
+                <div class="aj-widget">
+                    <div class="aj-widget-head">
+                        <span class="aj-widget-mark"></span>
+                        <h2 class="aj-widget-title">인기 검색어</h2>
+                        <span style="margin-left:auto;font-size:0.68rem;color:#9ca3af;">최근 7일</span>
+                    </div>
+                    <?php echo lp_aj_popular_keywords_html(); ?>
+                </div>
+
+                <!-- 기자 순위 위젯 -->
+                <?php echo lp_reporter_rank_widget_html( 'aj' ); ?>
+
                 <!-- 추천 기사 위젯 -->
                 <?php
                 $aj_s_picks_custom = get_theme_mod( 'lp_aj_picks_title', '' );
@@ -413,6 +472,7 @@ if ( $current_theme_style === 'amber-journal' ) :
 
     /* ── SNS 공유 ── */
     window.ajShare = function (platform) {
+        if (window.lpTrackShare) window.lpTrackShare(platform);
         var url   = encodeURIComponent(location.href);
         var title = encodeURIComponent(document.title);
         if (platform === 'facebook') {
@@ -420,17 +480,11 @@ if ( $current_theme_style === 'amber-journal' ) :
         } else if (platform === 'x') {
             window.open('https://twitter.com/intent/tweet?url=' + url + '&text=' + title, '_blank', 'width=620,height=440,noopener,noreferrer');
         } else if (platform === 'kakao') {
-            if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) {
-                window.Kakao.Link.sendDefault({
-                    objectType: 'feed',
-                    content: { title: document.title, webUrl: location.href, mobileWebUrl: location.href, imageUrl: '', description: '' },
-                    buttons: [{ title: '기사 보기', link: { webUrl: location.href } }]
-                });
-            } else {
-                navigator.clipboard.writeText(location.href)
-                    .then(function () { alert('카카오톡 SDK 미설치 환경입니다.\nURL이 클립보드에 복사되었습니다.'); })
+            /* 카카오 SDK 헬퍼 (assets/js/kakao-share.js) — 키 미설정 시 URL 복사로 폴백 */
+            if (window.lpKakaoShare) window.lpKakaoShare();
+            else navigator.clipboard.writeText(location.href)
+                    .then(function () { alert('URL이 클립보드에 복사되었습니다.'); })
                     .catch(function () { alert(location.href); });
-            }
         }
     };
 
@@ -453,6 +507,103 @@ if ( $current_theme_style === 'amber-journal' ) :
             ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done();
         }
     };
+
+    /* ── 기사 반응 버튼 ── */
+    (function () {
+        var rxBar = document.getElementById('lp-reactions');
+        if (!rxBar) return;
+
+        var postId   = rxBar.dataset.postId;
+        var nonce    = rxBar.dataset.nonce;
+        var ajaxUrl  = rxBar.dataset.ajax;
+        var LS_KEY   = 'lp_rx_' + postId;
+        var loggedIn = <?php echo is_user_logged_in() ? 'true' : 'false'; ?>;
+
+        /* 비로그인: localStorage 에서 기존 반응 복원 */
+        if (!loggedIn) {
+            try {
+                var saved = localStorage.getItem(LS_KEY);
+                if (saved) {
+                    var b = rxBar.querySelector('[data-type="' + saved + '"]');
+                    if (b) { b.classList.add('is-reacted'); b.setAttribute('aria-pressed', 'true'); }
+                }
+            } catch (e) {}
+        }
+
+        rxBar.addEventListener('click', function (e) {
+            var btn = e.target.closest('.lp-rx-btn');
+            if (!btn || btn.disabled) return;
+
+            var type      = btn.dataset.type;
+            var isReacted = btn.classList.contains('is-reacted');
+            var prevBtn   = rxBar.querySelector('.lp-rx-btn.is-reacted');
+
+            /* 응답 도착 전 중복 클릭으로 인한 중복 카운트 방지 */
+            rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) { b.disabled = true; });
+
+            /* Optimistic UI */
+            rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                b.classList.remove('is-reacted');
+                b.setAttribute('aria-pressed', 'false');
+            });
+            if (!isReacted) {
+                btn.classList.add('is-reacted');
+                btn.setAttribute('aria-pressed', 'true');
+            }
+
+            /* AJAX */
+            var fd = new FormData();
+            fd.append('action',  'lp_react');
+            fd.append('nonce',   nonce);
+            fd.append('post_id', postId);
+            fd.append('type',    type);
+
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res.success) return;
+                    var d = res.data;
+
+                    /* 카운트 갱신 */
+                    var cEl = document.getElementById('lp-rx-count-' + d.type);
+                    if (cEl) cEl.textContent = d.count > 0 ? Number(d.count).toLocaleString() : '';
+
+                    if (d.prev_type !== undefined) {
+                        var pEl = document.getElementById('lp-rx-count-' + d.prev_type);
+                        if (pEl) pEl.textContent = d.prev_count > 0 ? Number(d.prev_count).toLocaleString() : '';
+                    }
+
+                    /* 버튼 상태 서버 응답 기준으로 재조정 */
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                        b.classList.remove('is-reacted');
+                        b.setAttribute('aria-pressed', 'false');
+                    });
+                    if (d.active) {
+                        var ab = rxBar.querySelector('[data-type="' + d.type + '"]');
+                        if (ab) { ab.classList.add('is-reacted'); ab.setAttribute('aria-pressed', 'true'); }
+                    }
+
+                    /* localStorage (비로그인 중복 방지) */
+                    if (!loggedIn) {
+                        try {
+                            if (d.active) { localStorage.setItem(LS_KEY, d.type); }
+                            else          { localStorage.removeItem(LS_KEY); }
+                        } catch (e) {}
+                    }
+                })
+                .catch(function () {
+                    /* 실패 시 Optimistic UI 되돌리기 */
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                        b.classList.remove('is-reacted');
+                        b.setAttribute('aria-pressed', 'false');
+                    });
+                    if (prevBtn) { prevBtn.classList.add('is-reacted'); prevBtn.setAttribute('aria-pressed', 'true'); }
+                })
+                .finally(function () {
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) { b.disabled = false; });
+                });
+        });
+    })();
 })();
 </script>
 
@@ -504,7 +655,7 @@ if ( have_posts() ) : the_post();
     <div id="lp-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
 </div>
 
-<main class="flex-grow <?php echo isset( $lp_main_class ) ? $lp_main_class : 'py-10 bg-slate-50'; ?>">
+<main class="flex-grow <?php echo isset( $lp_main_class ) ? $lp_main_class : 'py-6 md:py-10 bg-slate-50'; ?>">
     <div class="<?php echo $container_class; ?> grid grid-cols-1 lg:grid-cols-4 gap-8">
 
         <!-- 본문 -->
@@ -512,7 +663,13 @@ if ( have_posts() ) : the_post();
             <article class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
                 <?php if ( has_post_thumbnail() ) : ?>
-                <?php the_post_thumbnail( 'large', [ 'class' => 'w-full max-h-[420px] object-cover block' ] ); ?>
+                <figure class="m-0">
+                    <?php the_post_thumbnail( 'large', [ 'class' => 'w-full max-h-[420px] object-cover block' ] ); ?>
+                    <?php $lp_hero_caption = get_the_post_thumbnail_caption(); ?>
+                    <?php if ( $lp_hero_caption ) : ?>
+                    <figcaption class="text-sm text-slate-500 text-center px-4 py-2 border-t border-slate-100"><?php echo esc_html( $lp_hero_caption ); ?></figcaption>
+                    <?php endif; ?>
+                </figure>
                 <?php endif; ?>
 
                 <div class="p-6 md:p-8">
@@ -545,6 +702,8 @@ if ( have_posts() ) : the_post();
                             <span>·</span>
                             <span class="text-blue-500"><?php echo get_the_modified_date( 'Y.m.d H:i' ); ?> 수정</span>
                             <?php endif; ?>
+                            <span>·</span>
+                            <span>조회 <?php echo number_format( (int) get_post_meta( get_the_ID(), 'lara_post_views', true ) ); ?>회</span>
                         </div>
                         <div class="flex items-center gap-1.5">
                             <div class="lp-font-ctrl" title="글자 크기 조절">
@@ -562,6 +721,7 @@ if ( have_posts() ) : the_post();
                     </header>
 
                     <div id="lp-article-body" class="text-slate-700 text-[1.0625rem] leading-[1.85] mb-8 break-words
+                        [&_p]:mb-7
                         [&_h2]:text-xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:mt-8
                         [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-6
                         [&_img]:rounded-lg [&_img]:my-4 [&_img]:max-w-full
@@ -575,15 +735,54 @@ if ( have_posts() ) : the_post();
                     <?php $lp_tags = get_the_tags(); ?>
                     <?php if ( $lp_tags ) : ?>
                     <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
-                        <?php foreach ( $lp_tags as $lp_t ) : ?>
-                        <a href="<?php echo esc_url( get_tag_link( $lp_t->term_id ) ); ?>"
+                        <?php foreach ( $lp_tags as $lp_i => $lp_t ) : ?>
+                        <a href="<?php echo esc_url( get_tag_link( $lp_t->term_id ) ); ?>"<?php if ( $lp_i >= 3 ) echo ' data-lp-tag-extra hidden'; ?>
                            class="text-xs px-3 py-1 rounded-full border border-slate-200 text-slate-500
                                   hover:border-blue-400 hover:text-blue-600 transition">
                             #<?php echo esc_html( $lp_t->name ); ?>
                         </a>
                         <?php endforeach; ?>
+                        <?php if ( count( $lp_tags ) > 3 ) : ?>
+                        <button type="button"
+                                class="text-xs px-3 py-1 rounded-full border border-dashed border-slate-300 text-slate-500
+                                       hover:border-blue-400 hover:text-blue-600 transition"
+                                onclick="this.parentNode.querySelectorAll('[data-lp-tag-extra]').forEach(function(t){t.hidden=false;});this.remove();">
+                            +<?php echo count( $lp_tags ) - 3; ?> 더보기
+                        </button>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
+
+                    <!-- 기사 반응 버튼 -->
+                    <?php
+                    $lp_rx_types = lp_reaction_types();
+                    $lp_rx_data  = get_post_meta( get_the_ID(), 'lp_reactions', true );
+                    $lp_rx_data  = is_array( $lp_rx_data ) ? $lp_rx_data : [];
+                    $lp_rx_mine  = lp_get_user_reactions( get_the_ID() );
+                    $lp_rx_nonce = wp_create_nonce( 'lp_reaction_nonce' );
+                    ?>
+                    <div class="lp-reactions"
+                         id="lp-reactions"
+                         data-post-id="<?php echo get_the_ID(); ?>"
+                         data-nonce="<?php echo esc_attr( $lp_rx_nonce ); ?>"
+                         data-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>">
+                        <p class="lp-rx-label">이 기사에 반응을 남겨주세요</p>
+                        <div class="lp-rx-btns">
+                        <?php foreach ( $lp_rx_types as $rtype => $rinfo ) :
+                            $rcount  = (int) ( $lp_rx_data[ $rtype ] ?? 0 );
+                            $ractive = in_array( $rtype, $lp_rx_mine, true );
+                        ?>
+                        <button class="lp-rx-btn<?php echo $ractive ? ' is-reacted' : ''; ?>"
+                                data-type="<?php echo esc_attr( $rtype ); ?>"
+                                aria-label="<?php echo esc_attr( $rinfo['label'] ); ?>"
+                                aria-pressed="<?php echo $ractive ? 'true' : 'false'; ?>">
+                            <span class="lp-rx-emoji" aria-hidden="true"><?php echo $rinfo['emoji']; ?></span>
+                            <span class="lp-rx-name"><?php echo esc_html( $rinfo['label'] ); ?></span>
+                            <span class="lp-rx-count" id="lp-rx-count-<?php echo esc_attr( $rtype ); ?>"><?php echo $rcount > 0 ? number_format( $rcount ) : ''; ?></span>
+                        </button>
+                        <?php endforeach; ?>
+                        </div>
+                    </div>
 
                     <!-- 기자 프로필 서명 (복수 저자 지원) -->
                     <?php
@@ -664,26 +863,7 @@ if ( have_posts() ) : the_post();
                     <span class="ml-auto text-[10px] font-normal text-slate-400 tracking-wide">HOT</span>
                 </h3>
                 <?php
-                $lp_hot_list = get_transient( 'lp_hot_news_v2' );
-                if ( $lp_hot_list === false ) {
-                    $gravity = 1.8; $now = time();
-                    $pool = new WP_Query( [ 'post_type' => 'post', 'post_status' => 'publish',
-                        'posts_per_page' => 200, 'date_query' => [ [ 'after' => '90 days ago' ] ],
-                        'no_found_rows' => true, 'update_post_meta_cache' => true, 'update_post_term_cache' => false ] );
-                    $scored = [];
-                    foreach ( $pool->posts as $p ) {
-                        $v = max( 1, (int) get_post_meta( $p->ID, 'lara_post_views', true ) );
-                        $h = max( 0, ( $now - strtotime( $p->post_date_gmt ) ) / 3600 );
-                        $scored[ $p->ID ] = ( $v - 1 ) / pow( $h + 2, $gravity );
-                    }
-                    wp_reset_postdata(); arsort( $scored );
-                    $lp_hot_list = [];
-                    foreach ( array_slice( array_keys( $scored ), 0, 5, true ) as $id ) {
-                        $lp_hot_list[] = [ 'title' => get_the_title( $id ), 'url' => get_permalink( $id ),
-                            'views' => number_format( (int) get_post_meta( $id, 'lara_post_views', true ) ) ];
-                    }
-                    set_transient( 'lp_hot_news_v2', $lp_hot_list, 10 * MINUTE_IN_SECONDS );
-                }
+                $lp_hot_list = lp_hot_news_list(); // 조회 40% · 반응 50% · 공유 10%
                 ?>
                 <?php if ( $lp_hot_list ) : ?>
                 <ol class="space-y-3 text-sm text-slate-600">
@@ -699,6 +879,9 @@ if ( have_posts() ) : the_post();
                 </ol>
                 <?php else : ?><p class="text-sm text-slate-400 text-center py-4">아직 데이터가 없습니다.</p><?php endif; ?>
             </div>
+
+            <!-- 인기 검색어 -->
+            <?php echo lp_popular_keywords_widget_html( 'mb-6' ); ?>
 
             <!-- 카테고리 -->
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
@@ -785,14 +968,15 @@ if ( have_posts() ) : the_post();
     applyFontSize(fsIdx);
 
     window.lpShare = function(platform) {
+        if (window.lpTrackShare) window.lpTrackShare(platform);
         var url = encodeURIComponent(location.href);
         var title = encodeURIComponent(document.title);
         if (platform === 'facebook') window.open('https://www.facebook.com/sharer/sharer.php?u=' + url, '_blank', 'width=620,height=440,noopener,noreferrer');
         else if (platform === 'twitter') window.open('https://twitter.com/intent/tweet?url=' + url + '&text=' + title, '_blank', 'width=620,height=440,noopener,noreferrer');
         else if (platform === 'kakao') {
-            if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) {
-                window.Kakao.Link.sendDefault({ objectType:'feed', content:{ title:document.title, webUrl:location.href, mobileWebUrl:location.href, imageUrl:'', description:'' }, buttons:[{ title:'기사 보기', link:{ webUrl:location.href } }] });
-            } else { navigator.clipboard.writeText(location.href).then(function(){ alert('카카오톡 SDK 미설치 환경입니다.\nURL이 복사되었습니다.'); }); }
+            /* 카카오 SDK 헬퍼 (assets/js/kakao-share.js) — 키 미설정 시 URL 복사로 폴백 */
+            if (window.lpKakaoShare) window.lpKakaoShare();
+            else navigator.clipboard.writeText(location.href).then(function(){ alert('URL이 복사되었습니다.'); });
         }
     };
     window.lpCopyUrl = function(btn) {
@@ -801,6 +985,86 @@ if ( have_posts() ) : the_post();
         if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done).catch(function(){ var ta=document.createElement('textarea'); ta.value=location.href; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); });
         else { var ta=document.createElement('textarea'); ta.value=location.href; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); }
     };
+
+    /* ── 기사 반응 버튼 ── */
+    (function () {
+        var rxBar = document.getElementById('lp-reactions');
+        if (!rxBar) return;
+
+        var postId   = rxBar.dataset.postId;
+        var nonce    = rxBar.dataset.nonce;
+        var ajaxUrl  = rxBar.dataset.ajax;
+        var LS_KEY   = 'lp_rx_' + postId;
+        var loggedIn = <?php echo is_user_logged_in() ? 'true' : 'false'; ?>;
+
+        if (!loggedIn) {
+            try {
+                var saved = localStorage.getItem(LS_KEY);
+                if (saved) {
+                    var b = rxBar.querySelector('[data-type="' + saved + '"]');
+                    if (b) { b.classList.add('is-reacted'); b.setAttribute('aria-pressed', 'true'); }
+                }
+            } catch (e) {}
+        }
+
+        rxBar.addEventListener('click', function (e) {
+            var btn = e.target.closest('.lp-rx-btn');
+            if (!btn || btn.disabled) return;
+
+            var type      = btn.dataset.type;
+            var isReacted = btn.classList.contains('is-reacted');
+            var prevBtn   = rxBar.querySelector('.lp-rx-btn.is-reacted');
+
+            /* 응답 도착 전 중복 클릭으로 인한 중복 카운트 방지 */
+            rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) { b.disabled = true; });
+
+            rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                b.classList.remove('is-reacted'); b.setAttribute('aria-pressed', 'false');
+            });
+            if (!isReacted) { btn.classList.add('is-reacted'); btn.setAttribute('aria-pressed', 'true'); }
+
+            var fd = new FormData();
+            fd.append('action',  'lp_react');
+            fd.append('nonce',   nonce);
+            fd.append('post_id', postId);
+            fd.append('type',    type);
+
+            fetch(ajaxUrl, { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res.success) return;
+                    var d = res.data;
+                    var cEl = document.getElementById('lp-rx-count-' + d.type);
+                    if (cEl) cEl.textContent = d.count > 0 ? Number(d.count).toLocaleString() : '';
+                    if (d.prev_type !== undefined) {
+                        var pEl = document.getElementById('lp-rx-count-' + d.prev_type);
+                        if (pEl) pEl.textContent = d.prev_count > 0 ? Number(d.prev_count).toLocaleString() : '';
+                    }
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                        b.classList.remove('is-reacted'); b.setAttribute('aria-pressed', 'false');
+                    });
+                    if (d.active) {
+                        var ab = rxBar.querySelector('[data-type="' + d.type + '"]');
+                        if (ab) { ab.classList.add('is-reacted'); ab.setAttribute('aria-pressed', 'true'); }
+                    }
+                    if (!loggedIn) {
+                        try {
+                            if (d.active) { localStorage.setItem(LS_KEY, d.type); }
+                            else          { localStorage.removeItem(LS_KEY); }
+                        } catch (e) {}
+                    }
+                })
+                .catch(function () {
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) {
+                        b.classList.remove('is-reacted'); b.setAttribute('aria-pressed', 'false');
+                    });
+                    if (prevBtn) { prevBtn.classList.add('is-reacted'); prevBtn.setAttribute('aria-pressed', 'true'); }
+                })
+                .finally(function () {
+                    rxBar.querySelectorAll('.lp-rx-btn').forEach(function (b) { b.disabled = false; });
+                });
+        });
+    })();
 })();
 </script>
 

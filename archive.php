@@ -86,7 +86,7 @@ if ( $current_theme_style === 'newyorktimes-style' ) {
     $lp_content_class = 'basic-content-area';
     $lp_sidebar_class = 'basic-sidebar-area';
 } else {
-    $lp_main_class    = 'py-10 bg-slate-50';
+    $lp_main_class    = 'py-6 md:py-10 bg-slate-50';
     $lp_content_class = 'bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm';
     $lp_sidebar_class = '';
 }
@@ -129,7 +129,7 @@ get_header();
                                 $arc_style_labels = [ 'list' => '리스트형', 'grid2' => '2열 그리드', 'grid3' => '3열 그리드', 'webzine' => '웹진형' ];
                                 echo esc_html( $arc_style_labels[ $arc_style ] ?? '리스트형' );
                             ?></span>
-                            <span class="text-slate-300 ml-1">(외모 › 사용자 정의하기 › 사이드바 위젯 설정에서 변경)</span>
+                            <span class="text-slate-300 ml-1">(테마 설정 › 레이아웃 › 사이드바 위젯 설정에서 변경)</span>
                         </span>
                     </div>
                 </div>
@@ -296,7 +296,7 @@ get_header();
                         <input type="text" name="s" placeholder="검색어 입력..."
                                class="w-full border border-slate-300 rounded-l px-3 py-2 text-sm outline-none focus:border-blue-500">
                         <button type="submit"
-                                class="bg-slate-900 text-white px-4 rounded-r text-sm font-medium hover:bg-slate-800">검색</button>
+                                class="bg-slate-900 text-white px-3 rounded-r hover:bg-slate-800 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg></button>
                     </form>
                 </div>
 
@@ -340,38 +340,7 @@ get_header();
                         <span class="ml-auto text-[10px] font-normal text-slate-400 tracking-wide">HOT</span>
                     </h3>
                     <?php
-                    $lp_hot_cache_key = 'lp_hot_news_v2';
-                    $lp_hot_list      = get_transient( $lp_hot_cache_key );
-                    if ( $lp_hot_list === false ) {
-                        $lp_gravity = 1.8;
-                        $lp_now     = time();
-                        $lp_pool_q  = new WP_Query( [
-                            'post_type'              => 'post',
-                            'post_status'            => 'publish',
-                            'posts_per_page'         => 200,
-                            'date_query'             => [ [ 'after' => '90 days ago' ] ],
-                            'no_found_rows'          => true,
-                            'update_post_meta_cache' => true,
-                            'update_post_term_cache' => false,
-                        ] );
-                        $lp_scored = [];
-                        foreach ( $lp_pool_q->posts as $lp_p ) {
-                            $lp_views   = max( 1, (int) get_post_meta( $lp_p->ID, 'lara_post_views', true ) );
-                            $lp_hours   = max( 0, ( $lp_now - strtotime( $lp_p->post_date_gmt ) ) / 3600 );
-                            $lp_scored[ $lp_p->ID ] = ( $lp_views - 1 ) / pow( $lp_hours + 2, $lp_gravity );
-                        }
-                        wp_reset_postdata();
-                        arsort( $lp_scored );
-                        $lp_hot_list = [];
-                        foreach ( array_slice( array_keys( $lp_scored ), 0, 5, true ) as $lp_id ) {
-                            $lp_hot_list[] = [
-                                'title' => get_the_title( $lp_id ),
-                                'url'   => get_permalink( $lp_id ),
-                                'views' => number_format( (int) get_post_meta( $lp_id, 'lara_post_views', true ) ),
-                            ];
-                        }
-                        set_transient( $lp_hot_cache_key, $lp_hot_list, 10 * MINUTE_IN_SECONDS );
-                    }
+                    $lp_hot_list = lp_hot_news_list(); // 조회 40% · 반응 50% · 공유 10%
                     ?>
                     <?php if ( $lp_hot_list ) : ?>
                     <ol class="space-y-3 text-sm text-slate-600">
@@ -394,6 +363,9 @@ get_header();
                     <p class="text-sm text-slate-400 text-center py-4">아직 데이터가 없습니다.</p>
                     <?php endif; ?>
                 </div>
+
+                <!-- 인기 검색어 -->
+                <?php echo lp_popular_keywords_widget_html(); ?>
 
                 <!-- 우측 배너 -->
                 <?php $lp_banner_side = get_theme_mod( 'lp_banner_side', '' ); ?>
